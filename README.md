@@ -91,7 +91,7 @@ The installer refuses to run from an administrator window, because Spicetify fil
 
 **Start from your playlists.** Spotify opens on the Playlists page: your playlists and Liked Songs, grouped by folder, with a filter box at the top. Click one: it starts playing, ivLyrics goes fullscreen and the library pane is already open. When you leave fullscreen, you're back on the Playlists page. In windows 720 pixels tall or less, the page shows names only.
 
-**Browse your library (Alt+L).** The pane slides out from the left. In wide windows (1100 pixels or more) it pushes the fullscreen over; in narrower ones it floats on top. Its top row shows where you are as a path, for example `/all/techno/dj`. Names too long for the pane are shortened in the middle, so both ends stay readable: `techno-hardgroove` can become `tech…oove`, and parent folders lose their vowels (`techno` becomes `tchn`) or fold into `…` before the current name is cut. Hover the path to see it in full.
+**Browse your library (Alt+L).** The pane slides out from the left, and the cursor goes straight into its search box and stays there, so you can type or use the arrow keys without clicking first. The library and queue panes are always the same width (the average of a 300-pixel pane and half the window) and share the same see-through dark background. In wide windows (1100 pixels or more) it pushes the fullscreen over; in narrower ones it floats on top. Its top row shows where you are as a path, for example `/all/techno/dj`. Names too long for the pane are shortened in the middle, so both ends stay readable: `techno-hardgroove` can become `tech…oove`, and parent folders lose their vowels (`techno` becomes `tchn`) or fold into `…` before the current name is cut. Hover the path to see it in full.
 - Click a playlist or Liked Songs to open it in the pane. Each track is one line, "Artist – Song", with the date it was added, newest first.
 - Browsing never changes what's playing. A single click on a track only selects it. Double-click a track to play that playlist from there.
 - To hear a track next without leaving your current playlist, hover it and click the yellow **q** on the right, or select it and press Q. It goes to the front of Spotify's queue, and the queue pane (Alt+R) shows it with a yellow **u** in front.
@@ -122,12 +122,16 @@ Tab widens the search at any time, even when there are matches. Esc clears the s
 
 ### Keys
 
-All of these work in ivLyrics fullscreen only.
+All of these work in ivLyrics fullscreen only, except Space, which works everywhere in Spotify.
 
 | Press | Where it works | What happens |
 |---|---|---|
 | Alt+L | Anywhere | Opens or closes the library pane and puts the cursor in its search box. |
-| Q | Library pane, with a track selected and not typing | Puts the selected track first in the queue. |
+| Space | Anywhere in Spotify, fullscreen or not | Plays or pauses. The only exception is a text box that already has text in it, where Space types a space so multi-word searches still work. |
+| ↑ or ↓ | Library pane (the search box keeps the cursor) | Moves the selection through the list. The first press starts from the playing track. |
+| Enter | Library pane, a row selected, search box empty | Opens the selected folder or playlist, or plays the selected track. |
+| Q | Library pane, a track selected, search box empty | Puts the selected track first in the queue. With text in the box, Q just types. |
+| → | Library pane, cursor at the end of the search text | Closes the library and moves the focus to the middle. |
 | Alt+R | Anywhere | Opens or closes the queue pane. |
 | Backspace or Esc | Library pane | Clears the search if there's text. Otherwise goes up a level, or closes the pane at the top level. Esc never exits fullscreen while the pane is open. |
 | Y, Enter or Tab | Library search with no matches | Widens the search: this view, then all playlists, then Spotify. Tab works even with matches. |

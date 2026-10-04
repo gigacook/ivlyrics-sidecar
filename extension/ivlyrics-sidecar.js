@@ -17,6 +17,7 @@
 // Focus moves between the queue and the middle: ← in the queue (or a click on
 // empty space in the middle) folds the queue away and parks a blinking caret
 // above the player; → from there reopens the queue, ← opens the library.
+// Space toggles play/pause anywhere in Spotify (except mid-word in a text box).
 // Lyrics side: clicking a line never seeks; a faint gear (level with play /
 // pause) opens a per-track sync-offset dialog.
 // Also: hides window buttons until hovered, removes the presentation switcher,
@@ -45,6 +46,8 @@
   const style = document.createElement("style");
   style.id = "ivlib-style";
   style.textContent = `
+    /* Shared pane backdrop: the average of the old library (.55, 24px) and queue (none) looks. */
+    :root { --ivpane-bg: rgba(10,10,12,.28); --ivpane-blur: blur(12px) saturate(1.1); }
     :root { --ivlib-w: ${PANEL_W}px; --ivmono: "JetBrains Mono", "JetBrainsMono Nerd Font", Consolas, monospace; }
     :is(#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivlib-tab) { font-family: var(--ivmono) !important; }
     :is(#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg) :is(input, button) { font-family: inherit; }
@@ -71,7 +74,7 @@
       position: fixed; left: 0; top: 0; bottom: 0; width: var(--ivlib-w);
       z-index: 2147483646; box-sizing: border-box; padding: 48px 8px 10px;
       display: flex; flex-direction: column; gap: 8px;
-      background: rgba(10,10,12,.55); backdrop-filter: blur(24px) saturate(1.2);
+      background: var(--ivpane-bg); backdrop-filter: var(--ivpane-blur);
       border-right: 1px solid rgba(255,255,255,.06);
       transform: translateX(-100%); transition: transform .22s ease;
       font-family: var(--ivmono); color: #fff;
@@ -139,6 +142,7 @@
       position: fixed; right: 0; top: 0; bottom: 0; width: var(--ivnext-w, 50vw);
       z-index: 2147483645; color: #fff; pointer-events: none;
       font-family: var(--ivmono);
+      background: var(--ivpane-bg); backdrop-filter: var(--ivpane-blur);
       transform-origin: left center;
       transform: perspective(1400px) rotateY(88deg);
       opacity: 0;
@@ -809,6 +813,7 @@
     const row = e.target.closest(".ivlib-row");
     if (!row) return;
     const v = listViews[+row.dataset.i];
+    setTimeout(() => input.focus({ preventScroll: true }), 0);
     if (e.target.closest(".ivlib-q")) return queueNext(v, row);
     // Tracks: a click only selects, so browsing never interrupts playback.
     if (v?.type === "track") { state.sel = +row.dataset.i; markSel(); return; }
@@ -823,7 +828,36 @@
   // Keep typing from triggering Spotify / ivLyrics shortcuts (space, F12…).
   input.addEventListener("keydown", (e) => {
     e.stopPropagation();
-    if (!search.q) return;
+    // → at the end of the text: close the library, focus the middle.
+    if (e.key === "ArrowRight" && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+      e.preventDefault();
+      input.blur();
+      setOpen(false);
+      setFocus("mid");
+      return;
+    }
+    if (!search.q) {
+      // Browsing: arrows move the selection, Enter opens / plays, Q (empty box) queues next.
+      const n = listViews.length;
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
+        e.preventDefault();
+        let i = state.sel;
+        if (i < 0) {
+          const playing = listViews.findIndex((v) => v.uri === Spicetify.Player.data?.item?.uri);
+          i = playing >= 0 ? playing : e.key === "ArrowDown" ? -1 : n;
+        }
+        state.sel = Math.max(0, Math.min(n - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+        markSel();
+        list.querySelector(".ivlib-row.sel")?.scrollIntoView({ block: "nearest" });
+      } else if (e.key === "Enter" && state.sel >= 0) {
+        e.preventDefault();
+        activate(listViews[state.sel]);
+      } else if ((e.key === "q" || e.key === "Q") && !input.value && listViews[state.sel]?.type === "track") {
+        e.preventDefault();
+        queueNext(listViews[state.sel], list.querySelector(".ivlib-row.sel"));
+      }
+      return;
+    }
     const n = listViews.length;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -843,6 +877,18 @@
   ["keyup", "keypress"].forEach((t) => input.addEventListener(t, (e) => e.stopPropagation()));
 
   window.addEventListener("keydown", (e) => {
+    // Space = play/pause anywhere in Spotify. Only exception: a text box that
+    // already has text, so multi-word searches can still be typed.
+    if (e.code === "Space" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      const field = e.target?.matches?.("input, textarea, [contenteditable='true']") ? e.target : null;
+      const typingWords = field && (field.value ?? field.textContent ?? "").length > 0;
+      if (!typingWords) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!e.repeat) Spicetify.Player.togglePlay();
+        return;
+      }
+    }
     if (syncKeys(e)) return;
     if ((e.key === "q" || e.key === "Q") && !e.altKey && !e.ctrlKey && state.open
         && document.body.classList.contains("ivlib-fs")
@@ -904,7 +950,7 @@
     if (e.altKey && !e.ctrlKey && e.code === "KeyL" && document.body.classList.contains("ivlib-fs")) {
       e.preventDefault();
       setOpen(!state.open);
-      if (state.open) setTimeout(() => input.focus(), 50);
+      if (state.open) { setFocus(null); setTimeout(() => input.focus(), 50); }
     }
     if (e.altKey && !e.ctrlKey && e.code === "KeyR" && document.body.classList.contains("ivlib-fs")) {
       e.preventDefault();
@@ -1179,13 +1225,14 @@
   }
 
   // Lyrics column sits right of the album panel; size the pane to match it.
+  // Both panes share one width: the average of the library pane's base width
+  // and the lyrics column (half the window). Based on the window only, so the
+  // library pane pushing the layout can't feed back into it.
   function sizeNext() {
-    const lp = document.querySelector(`${FS_SELECTOR} .lyrics-fullscreen-left-panel`);
-    // Our horizontal shift is not part of ivLyrics' column; take it back out.
-    const shiftX = lp ? parseFloat((lp.style.translate || "0px").split(" ")[0]) || 0 : 0;
-    let w = lp ? window.innerWidth - (lp.getBoundingClientRect().right - shiftX) : window.innerWidth / 2;
-    if (w < window.innerWidth * 0.2) w = window.innerWidth / 2; // single-column mid-transition
-    document.documentElement.style.setProperty("--ivnext-w", `${Math.max(240, Math.round(w))}px`);
+    const w = Math.max(240, Math.round((PANEL_W + window.innerWidth / 2) / 2));
+    const css = document.documentElement.style;
+    css.setProperty("--ivnext-w", `${w}px`);
+    css.setProperty("--ivlib-w", `${w}px`);
   }
 
   // Centre ivLyrics' album column (art -> controls) on the window's midline,
