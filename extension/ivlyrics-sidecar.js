@@ -104,10 +104,13 @@
       display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px;
       cursor: pointer; min-height: 36px;
     }
-    .ivlib-row:hover, .ivlib-row.active { background: rgba(255,255,255,.1); }
-    .ivlib-row.playing .ivlib-name { color: var(--spice-button, #1db954); }
+    /* Playing = neon signal yellow; selection = violet. */
+    :root { --ivplay: #eaff3d; --ivplay-glow: rgba(234,255,61,.45); --ivsel: rgba(160,90,255,.32); --ivsel-edge: #c08cff; }
+    .ivlib-row:hover { background: rgba(255,255,255,.08); }
+    .ivlib-row.active { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge), 0 0 12px rgba(160,90,255,.25); }
+    .ivlib-row.playing .ivlib-name { color: var(--ivplay); text-shadow: 0 0 8px var(--ivplay-glow); }
     /* Browsing: selected row, and a hover chip that queues the track next. */
-    #ivlib-list .ivlib-row.sel { background: rgba(255,255,255,.12); box-shadow: inset 2px 0 0 rgba(255,255,255,.6); }
+    #ivlib-list .ivlib-row.sel { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge), 0 0 12px rgba(160,90,255,.25); }
     .ivlib-q {
       display: none; flex: none; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 4px;
       color: #ffd666; background: rgba(255,214,102,.14); cursor: pointer;
@@ -180,7 +183,7 @@
     #ivnext-list .ivlib-row { opacity: .6; }
     #ivnext-list .ivlib-row:hover { opacity: 1; }
     #ivnext-list .ivlib-row.current { opacity: 1; background: rgba(255,255,255,.1); }
-    #ivnext-list .ivlib-row.current .ivlib-name { color: var(--spice-button, #1db954); }
+    #ivnext-list .ivlib-row.current .ivlib-name { color: var(--ivplay); text-shadow: 0 0 8px var(--ivplay-glow); }
     #ivnext-list .ivlib-name { font-size: 13px; }
     /* Presentation switcher (standard/vinyl/video stage) pops up on album hover
        and is too easy to hit by accident. */
@@ -217,7 +220,15 @@
       text-shadow: 0 0 1px #fff, 0 0 6px rgba(255,255,255,.55), 0 0 14px rgba(255,255,255,.25);
     }
     #ivlib-head .ivlib-btn { font-size: 15px; line-height: 1; min-width: 30px; height: 28px; padding: 0 8px; border-radius: 7px; }
-    #ivlib-head .ivlib-btn[hidden] { display: none; }
+    #ivlib-head :is(.ivlib-btn, .ivlib-hk)[hidden] { display: none; }
+    /* Key hints, no box: "← ⌫" goes up, "→ ent" goes in. Clickable too. */
+    .ivlib-hk {
+      flex: none; border: 0; background: none; color: #fff; padding: 0 2px; cursor: pointer;
+      display: inline-flex; align-items: baseline; gap: 3px; opacity: .55; font-family: inherit;
+    }
+    .ivlib-hk b { font-size: 15px; font-weight: 800; text-shadow: 0 0 6px rgba(255,255,255,.45); }
+    .ivlib-hk span { font-size: 9.5px; letter-spacing: .04em; opacity: .8; }
+    .ivlib-hk:hover { opacity: 1; }
     .ivnext-album-head { display: flex; gap: 12px; align-items: center; padding: 4px 8px 10px; }
     .ivnext-album-head img { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; flex: none; }
     .ivnext-album-title { font-size: 14px; font-weight: 700; }
@@ -298,9 +309,9 @@
     #ivlib-panel::after { right: -1px; }
     #ivnext-panel::after { left: 0; }
     body.ivfocus-left #ivlib-panel::after, body.ivfocus-right #ivnext-panel::after { opacity: 1; }
-    #ivnext-list .ivlib-row.active { background: rgba(255,255,255,.12); box-shadow: inset 2px 0 0 rgba(255,255,255,.6); opacity: 1; }
-    body:not(.ivfocus-left) #ivlib-list .ivlib-row.sel { background: rgba(255,255,255,.05); box-shadow: inset 2px 0 0 rgba(255,255,255,.2); }
-    body:not(.ivfocus-right) #ivnext-list .ivlib-row.active { background: rgba(255,255,255,.05); box-shadow: inset 2px 0 0 rgba(255,255,255,.2); }
+    #ivnext-list .ivlib-row.active { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge), 0 0 12px rgba(160,90,255,.25); opacity: 1; }
+    body:not(.ivfocus-left) #ivlib-list .ivlib-row.sel,
+    body:not(.ivfocus-right) #ivnext-list .ivlib-row.active { background: rgba(160,90,255,.1); box-shadow: inset 2px 0 0 rgba(192,140,255,.35); }
 
     /* Corner guides, all four the same size and contrast: names on top,
        snap keys at the bottom. Each pair hides while its pane is open. */
@@ -401,8 +412,9 @@
     </aside>
     <aside id="ivlib-panel">
       <div class="ivlib-head" id="ivlib-head">
-        <button class="ivlib-btn" id="ivlib-back">‹</button>
+        <button class="ivlib-hk" id="ivlib-back" title="Up one level (Backspace)"><b>←</b><span>⌫</span></button>
         <div class="ivlib-title" id="ivlib-title"></div>
+        <button class="ivlib-hk" id="ivlib-ent" title="Go in (Enter)"><b>→</b><span>ent</span></button>
         <button class="ivlib-btn" id="ivlib-now" title="Back to what's playing">back..</button>
       </div>
       <div class="ivlib-searchwrap">
@@ -414,7 +426,7 @@
 
   const $ = (id) => document.getElementById(id);
   const tab = $("ivlib-tab"), list = $("ivlib-list");
-  const input = $("ivlib-search"), back = $("ivlib-back"), title = $("ivlib-title"), head = $("ivlib-head"), nowBtn = $("ivlib-now");
+  const input = $("ivlib-search"), back = $("ivlib-back"), title = $("ivlib-title"), head = $("ivlib-head"), nowBtn = $("ivlib-now"), entBtn = $("ivlib-ent");
 
   // ---------- data ----------
   const here = () => state.stack.at(-1);
@@ -641,7 +653,10 @@
     // Header row: back (when nested), glowing path, play (inside a playlist).
     back.hidden = !at;
     const ctxUri = playingListUri();
-    nowBtn.hidden = !ctxUri || at?.uri === ctxUri;
+    // Top level shows just the path. "→ ent" where Enter goes deeper (not in a
+    // track list, where it plays); "back.." only in a playlist that isn't playing.
+    nowBtn.hidden = !at || !ctxUri || at.uri === ctxUri || at.kind !== "tracks";
+    entBtn.hidden = at?.kind === "tracks";
     const segs = ["all", ...state.stack.map((n) => (n.name ?? "").toLowerCase())];
     title.textContent = fitPath(segs, charsFit(title, 12, 700));
     title.title = "/" + segs.join("/");
@@ -894,6 +909,10 @@
   });
   back.addEventListener("click", goUp);
   nowBtn.addEventListener("click", goToNow);
+  entBtn.addEventListener("click", () => {
+    const i = search.q ? search.active : state.sel;
+    if (i >= 0) activate(listViews[i]);
+  });
   // A click only selects; Enter or a double-click goes in / plays.
   list.addEventListener("click", (e) => {
     const row = e.target.closest(".ivlib-row");

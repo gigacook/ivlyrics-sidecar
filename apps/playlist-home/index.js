@@ -150,7 +150,7 @@ const CSS = `
 }
 .ph-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ph-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ph-card.playing .ph-name { color: var(--spice-button); }
+.ph-card.playing .ph-name { color: #eaff3d; text-shadow: 0 0 8px rgba(234,255,61,.45); }
 .ph-empty { opacity: .5; font-size: 13px; }
 /* Short windows: names-only list, no artwork. */
 @media (max-height: 720px) {
