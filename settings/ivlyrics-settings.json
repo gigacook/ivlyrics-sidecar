@@ -257,7 +257,7 @@
   "ivLyrics:visual:fullscreen-show-next-track": "true",
   "ivLyrics:visual:fullscreen-next-track-seconds": "8",
   "ivLyrics:visual:fullscreen-show-controls": "true",
-  "ivLyrics:visual:fullscreen-show-volume": "false",
+  "ivLyrics:visual:fullscreen-show-volume": "true",
   "ivLyrics:visual:fullscreen-show-progress": "true",
   "ivLyrics:visual:fullscreen-show-lyrics-progress": "false",
   "ivLyrics:visual:fullscreen-control-button-size": "38",

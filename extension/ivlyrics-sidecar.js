@@ -7,10 +7,14 @@
 // column is hidden; the current line shows in a box above the player.
 //
 // Keys (one dispatcher, onKey): Space play/pause anywhere; Esc back to just
-// the player; ← / → move focus between library, middle and queue (opening the
-// pane); ↑ / ↓ move the selection in the focused pane; Enter goes one level in
-// or plays; Backspace goes one level back (closing the pane at the top).
-// Clicks only select; double-click = Enter.
+// the player; F12 is swallowed (↑ from the middle exits fullscreen instead);
+// Ctrl+A snaps to the library (queue closed), Ctrl+E to the queue (library
+// closed); already there = no change;
+// ← / → move focus between library, middle and queue: entering a side opens
+// it, leaving it back to the middle closes it; ↑ / ↓ move the selection in
+// the focused pane; Enter goes one level in or plays; Backspace goes one level
+// back (closing the pane at the top). Clicks only select; double-click = Enter.
+// Mouse wheel over the player = volume in steps of 2 (100 at Spotify start).
 //
 // Library: playlists open in place, newest tracks first; q queues a track next;
 // "back.." jumps to what's playing; search widens on Y / Enter / Tab from this
@@ -48,16 +52,24 @@
     :is(#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg) :is(input, button) { font-family: inherit; }
     #ivlib-root { display: none; }
     body.ivlib-fs #ivlib-root { display: block; }
-    #ivlib-tab {
-      position: fixed; left: 0; top: 50%; transform: translateY(-50%);
-      z-index: 2147483647; width: 18px; height: 72px; border: 0; padding: 0;
-      border-radius: 0 8px 8px 0; cursor: pointer;
-      background: rgba(255,255,255,.08); color: rgba(255,255,255,.7);
-      font-size: 12px; transition: left .22s ease, background .15s;
-      backdrop-filter: blur(8px);
+    /* Steel grips on both edges: brushed steel, rivets, grip ridges, so it's
+       obvious the panes slide out. They ride on the pane edge when open. */
+    .ivgrip {
+      position: fixed; top: 50%; transform: translateY(-50%); z-index: 2147483647;
+      width: 14px; height: 88px; border: 0; padding: 0; cursor: pointer; opacity: .55;
+      background:
+        radial-gradient(circle at 50% 9px, #e9edf1 0 1.6px, #50555c 2.2px, transparent 2.8px),
+        radial-gradient(circle at 50% calc(100% - 9px), #e9edf1 0 1.6px, #50555c 2.2px, transparent 2.8px),
+        repeating-linear-gradient(180deg, transparent 0 5px, rgba(0,0,0,.35) 5px 6px, rgba(255,255,255,.18) 6px 7px) 0 22px / 100% calc(100% - 44px) no-repeat,
+        linear-gradient(90deg, #3a3e44, #9aa1a9 30%, #d5dadf 50%, #8a9097 70%, #33373c);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.45), 0 2px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.12);
+      transition: left .22s ease, right .22s ease, opacity .15s ease;
     }
-    #ivlib-tab:hover { background: rgba(255,255,255,.18); color: #fff; }
+    .ivgrip:hover { opacity: 1; }
+    #ivlib-tab { left: 0; border-radius: 0 6px 6px 0; }
+    #ivnext-tab { right: 0; border-radius: 6px 0 0 6px; }
     body.ivlib-open #ivlib-tab { left: var(--ivlib-w); }
+    body.ivnext-open #ivnext-tab { right: var(--ivnext-w); }
     #ivlib-panel {
       position: fixed; left: 0; top: 0; bottom: 0; width: var(--ivlib-w);
       z-index: 2147483646; box-sizing: border-box; padding: 48px 8px 10px;
@@ -124,23 +136,16 @@
     /* ---- right pane: tracks around the current one ---- */
     /* The list fills the shared band (--ivnext-top/bottom, set by layout()):
        at least 33%–66% of the height, stretched to the album column if taller. */
-    /* Closed = folded back like a book cover, hinged on the divider (left edge):
-       right edge swings away from the viewer, then fades. */
+    /* Slides in from the right, mirroring the library pane. */
     #ivnext-panel {
       position: fixed; right: 0; top: 0; bottom: 0; width: var(--ivnext-w, 50vw);
       z-index: 2147483645; color: #fff; pointer-events: none;
       font-family: var(--ivmono);
       background: var(--ivpane-bg); backdrop-filter: var(--ivpane-blur);
-      transform-origin: left center;
-      transform: perspective(1400px) rotateY(88deg);
-      opacity: 0;
-      transition: transform .15s cubic-bezier(.6, 0, .9, .4), opacity .06s linear .09s;
+      border-left: 1px solid rgba(255,255,255,.06);
+      transform: translateX(100%); transition: transform .22s ease;
     }
-    body.ivnext-open #ivnext-panel {
-      transform: perspective(1400px) rotateY(0deg);
-      opacity: 1;
-      transition: transform .15s cubic-bezier(.1, .6, .3, 1), opacity .05s linear;
-    }
+    body.ivnext-open #ivnext-panel { transform: none; }
     body:not(.ivnext-open) #ivnext-list { pointer-events: none !important; }
     /* ivLyrics' lyrics column is replaced by the lyric box; it keeps running
        (the box reads its active line) but is never shown or clickable. */
@@ -216,15 +221,6 @@
     .ivnext-album-title { font-size: 14px; font-weight: 700; }
     .ivnext-album-sub { font-size: 11px; opacity: .55; margin-top: 2px; }
     .ivlib-num { flex: none; width: 18px; text-align: right; font-size: 11px; opacity: .45; font-variant-numeric: tabular-nums; }
-    /* Middle focus: a thin blinking caret between the lyric box and the player. */
-    #ivfocus-caret {
-      position: fixed; z-index: 2147483640; width: 2px; height: 14px; border-radius: 1px;
-      left: 50vw; top: var(--ivcaret-y, 30vh); transform: translate(-50%, -50%);
-      background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.7), 0 0 14px rgba(255,255,255,.3);
-      display: none; pointer-events: none;
-    }
-    body.ivlib-fs.ivfocus-mid #ivfocus-caret { display: block; animation: ivcaret 1.06s steps(1, end) infinite; }
-    @keyframes ivcaret { 0% { opacity: .55; } 50% { opacity: 0; } }
     /* Sync gear: right of the lyric box, invisible until the pointer is near it. */
     #ivsync-gear {
       position: fixed; z-index: 2147483646; width: 26px; height: 26px; padding: 4px; margin: -13px 0 0 0;
@@ -304,6 +300,67 @@
     body:not(.ivfocus-left) #ivlib-list .ivlib-row.sel { background: rgba(255,255,255,.05); box-shadow: inset 2px 0 0 rgba(255,255,255,.2); }
     body:not(.ivfocus-right) #ivnext-list .ivlib-row.active { background: rgba(255,255,255,.05); box-shadow: inset 2px 0 0 rgba(255,255,255,.2); }
 
+    /* Corner guides, all four the same size and contrast: names on top,
+       snap keys at the bottom. Each pair hides while its pane is open. */
+    .ivedge {
+      position: fixed; z-index: 2147483639; font: 600 10.5px var(--ivmono); letter-spacing: .06em;
+      color: #fff; opacity: .28; pointer-events: none; transition: opacity .2s ease;
+    }
+    #ivedge-l, #ivedge-r { top: 14px; }
+    #ivkey-l, #ivkey-r { bottom: 14px; }
+    #ivedge-l, #ivkey-l { left: 22px; }
+    #ivedge-r, #ivkey-r { right: 22px; }
+    body.ivlib-open :is(#ivedge-l, #ivkey-l), body.ivnext-open :is(#ivedge-r, #ivkey-r) { opacity: 0; }
+
+    /* Arrow guide around a centre dot between the lyric box and the player.
+       The dot toggles the arrows (filled = shown, hollow = hidden) and is the
+       middle cursor: a ring blinks around it while the middle has the focus. */
+    #ivhint {
+      position: fixed; z-index: 2147483641; left: 50vw; top: var(--ivhint-y, 22vh); width: 260px; height: 56px;
+      transform: translateX(-50%); pointer-events: none; display: none;
+      font: 700 10.5px var(--ivmono); letter-spacing: .05em; color: #dde1e6;
+    }
+    body.ivlib-fs #ivhint { display: block; }
+    #ivhint span { position: absolute; display: flex; align-items: center; gap: 6px; opacity: .8; transition: opacity .2s ease;
+      text-shadow: 0 0 6px rgba(255,255,255,.5), 0 0 14px rgba(255,255,255,.2); }
+    #ivhint b { font-size: 17px; font-weight: 800; color: #f4f6f8; }
+    #ivhint .up { left: 50%; top: 0; transform: translateX(-50%); flex-direction: column; gap: 0; }
+    #ivhint .lf { right: calc(50% + 16px); top: 30px; }
+    #ivhint .rt { left: calc(50% + 16px); top: 35px; }
+    body.ivhint-off #ivhint span { opacity: 0; }
+    #ivhint-dot {
+      position: absolute; left: 50%; top: 40px; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; padding: 0;
+      border-radius: 50%; border: 1.5px solid #fff; background: #fff; box-sizing: border-box;
+      cursor: pointer; pointer-events: auto; opacity: .85; box-shadow: 0 0 6px rgba(255,255,255,.5);
+    }
+    body.ivhint-off #ivhint-dot { background: transparent; opacity: .4; box-shadow: none; }
+    #ivhint-dot::after {
+      content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid #fff;
+      opacity: 0; box-shadow: 0 0 6px rgba(255,255,255,.5);
+    }
+    body.ivfocus-mid #ivhint-dot::after { animation: ivring 1.06s steps(1, end) infinite; }
+    @keyframes ivring { 0% { opacity: .7; } 50% { opacity: 0; } }
+
+    /* Feedback line at the top of the queue pane: small, selectable. */
+    #ivnext-feedback {
+      position: absolute; left: 36px; right: 24px; top: calc(var(--ivnext-top, 33vh) - 54px);
+      font-size: 10px; letter-spacing: .03em; opacity: .28; color: #fff; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; user-select: text; cursor: text; pointer-events: auto;
+    }
+    #ivnext-feedback:hover { opacity: .55; }
+
+    /* Volume readout while scrolling. */
+    #ivvol {
+      position: fixed; z-index: 2147483641; left: 50vw; bottom: 18px; transform: translateX(-50%);
+      font: 700 11px var(--ivmono); letter-spacing: .06em; color: #fff; opacity: 0; pointer-events: none;
+      text-shadow: 0 0 6px rgba(255,255,255,.4); transition: opacity .35s ease;
+    }
+    #ivvol.on { opacity: .75; transition: opacity .05s linear; }
+
+    /* ivLyrics' loading pill moves into the lyric box. */
+    body.ivlib-fs .lyrics-generation-status-stack { display: none !important; }
+    #ivlyr-box .ld { font-size: 10px; letter-spacing: .06em; opacity: .45; }
+
     /* ivLyrics' "LYRICS PROVIDER <name>" footer: gone. */
     .lyrics-lyricsContainer-Provider { display: none !important; }
     /* ivLyrics' floating-notes "no lyrics" animation: never. */
@@ -321,14 +378,21 @@
   const root = document.createElement("div");
   root.id = "ivlib-root";
   root.innerHTML = `
-    <button id="ivlib-tab" title="Library (Alt+L)">▸</button>
+    <button id="ivlib-tab" class="ivgrip" title="Library (Ctrl+A)"></button>
+    <button id="ivnext-tab" class="ivgrip" title="Queue (Ctrl+E)"></button>
+    <div class="ivedge" id="ivedge-l">◂ library</div>
+    <div class="ivedge" id="ivedge-r">queue ▸</div>
+    <div class="ivedge" id="ivkey-l">ctrl+a</div>
+    <div class="ivedge" id="ivkey-r">ctrl+e</div>
+    <div id="ivhint"><span class="up"><b>↑</b>exit</span><span class="lf">library <b>←</b></span><button id="ivhint-dot" title="Show / hide the arrow guide"></button><span class="rt"><b>→</b> queue</span></div>
+    <div id="ivvol"></div>
     <div id="ivnext-divider"><div class="zip"></div><svg class="cog" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.3"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="white" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></div>
     <div id="ivlib-ctx" hidden></div>
-    <div id="ivfocus-caret"></div>
     <div id="ivlyr-box"></div>
     <button id="ivsync-gear" title="Lyrics sync offset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="currentColor" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></button>
     <div id="ivsync-dlg"></div>
     <aside id="ivnext-panel">
+      <div id="ivnext-feedback">feedback · github.com/gigacook/ivlyrics-sidecar/issues</div>
       <div id="ivnext-crumb"></div>
       <div id="ivnext-hint"></div>
       <div class="ivlib-list" id="ivnext-list"></div>
@@ -586,6 +650,7 @@
     list.innerHTML = items.length
       ? items.map((v, i) => anyRow(v.type === "track" ? v : { ...v, name: midTrunc(v.name, rowChars()) }, i)).join("")
       : `<div class="ivlib-empty">${state.items === null ? "Loading…" : "Nothing here."}</div>`;
+    if (state.sel >= 0) markSel();
     // After "back..": highlight and centre the playing track once it's loaded.
     if (state.focusNow && state.items) {
       state.focusNow = false;
@@ -797,7 +862,7 @@
     state.open = open;
     localStorage.setItem(STORE_OPEN, open ? "1" : "0");
     document.body.classList.toggle("ivlib-open", open);
-    tab.textContent = open ? "◂" : "▸";
+
     if (open && !state.items?.length) loadLibrary();
   }
 
@@ -806,6 +871,11 @@
     if (!state.open) return focusZone("left");
     setOpen(false);
     if (focus.zone === "left") setFocus(null);
+  });
+  $("ivnext-tab").addEventListener("click", () => {
+    if (!isOpen("right")) return focusZone("right");
+    setNext(false);
+    if (focus.zone === "right") setFocus(null);
   });
   back.addEventListener("click", goUp);
   nowBtn.addEventListener("click", goToNow);
@@ -1131,8 +1201,10 @@
     css.setProperty("--ivnext-top", `${Math.max(8, Math.round(top))}px`);
     css.setProperty("--ivnext-bottom", `${Math.max(8, Math.round(H - bottom))}px`);
     css.setProperty("--ivlyr-w", `${Math.max(160, Math.min(440, W - 2 * pw - 48))}px`);
-    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 16)}px`);
-    css.setProperty("--ivcaret-y", `${Math.round(playerTop - 8)}px`);
+    // Arrow guide (56px tall, dot 40px down) sits just above the player; the
+    // lyric box ends above the guide.
+    css.setProperty("--ivhint-y", `${Math.round(playerTop - 62)}px`);
+    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 68)}px`);
     placeGear();
   }
 
@@ -1179,7 +1251,7 @@
   }
 
   // ---------- keys: one dispatcher, in this order ----------
-  // 1 Space  2 Esc  3 open dialogs  4 Alt+L / Alt+R  5 the focused zone.
+  // 1 Space  2 Esc  3 open dialogs  4 Ctrl+A / Ctrl+E  5 the focused zone.
   function onKey(e) {
     const fs = document.body.classList.contains("ivlib-fs");
     const mod = e.altKey || e.ctrlKey || e.metaKey;
@@ -1193,6 +1265,9 @@
       return;
     }
     if (!fs) return;
+    // F12 (or whatever ivLyrics' fullscreen key is) no longer leaves; ↑ from the middle does.
+    const fsKey = (localStorage.getItem("ivLyrics:visual:fullscreen-key") || "f12").toLowerCase();
+    if (e.key === "F12" || (!field && (e.key ?? "").toLowerCase() === fsKey)) { consume(); return; }
     // 2. Esc: everything closed, just the player.
     if (e.key === "Escape" && !mod) { consume(); resetView(); return; }
     // Text fields that aren't ours keep their keys.
@@ -1205,13 +1280,10 @@
       if (e.key === "Enter" && inFilter) { consume(); ctx.views[0]?.act(); return; }
       if (inFilter) return;
     }
-    // 4. Pane toggles.
-    if (e.altKey && !e.ctrlKey && (e.code === "KeyL" || e.code === "KeyR")) {
+    // 4. Snap: Ctrl+A library only, Ctrl+E queue only.
+    if (e.ctrlKey && !e.altKey && !e.metaKey && (e.code === "KeyA" || e.code === "KeyE")) {
       consume();
-      const zone = e.code === "KeyL" ? "left" : "right";
-      if (!isOpen(zone)) return focusZone(zone);
-      if (zone === "left") setOpen(false); else setNext(false);
-      if (focus.zone === zone) setFocus(null);
+      snapTo(e.code === "KeyA" ? "left" : "right");
       return;
     }
     if (mod) return;
@@ -1221,12 +1293,38 @@
     if (zone === "right") return queueKey(e, consume);
     if (e.key === "ArrowLeft") { consume(); focusZone("left"); }
     else if (e.key === "ArrowRight") { consume(); focusZone("right"); }
+    else if (e.key === "ArrowUp") { consume(); exitFullscreen(); }
   }
+
+  function exitFullscreen() {
+    const lc = window.lyricContainer;
+    if (lc?.state?.isFullscreen && typeof lc.toggleFullscreen === "function") lc.toggleFullscreen();
+  }
+
+  // Snap to one side: that pane open and focused, the other closed. Already
+  // there = nothing moves. A fresh snap puts the cursor on the top row.
+  function snapTo(zone) {
+    if (zone === "left" && isOpen("right")) setNext(false);
+    if (zone === "right" && state.open) setOpen(false);
+    if (focus.zone === zone && isOpen(zone)) return;
+    focusZone(zone);
+    if (zone === "left" && !search.q && state.sel < 0) { state.sel = 0; markSel(); }
+    if (zone === "right" && getActive() < 0) { setActive(0); markActive(true); }
+  }
+
+  // Arrow guide on by default; the centre dot hides / shows it (remembered).
+  const HINT_KEY = "ivhint:hidden";
+  document.body.classList.toggle("ivhint-off", localStorage.getItem(HINT_KEY) === "1");
+  $("ivhint-dot").addEventListener("click", () => {
+    const off = !document.body.classList.contains("ivhint-off");
+    document.body.classList.toggle("ivhint-off", off);
+    localStorage.setItem(HINT_KEY, off ? "1" : "0");
+  });
 
   function libraryKey(e, consume) {
     const k = e.key;
     const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
-    if (k === "ArrowRight" && (e.target !== input || atEnd)) { consume(); setFocus("mid"); return; }
+    if (k === "ArrowRight" && (e.target !== input || atEnd)) { consume(); setOpen(false); setFocus("mid"); return; }
     if (search.q) {
       // Search results.
       const n = listViews.length;
@@ -1273,7 +1371,7 @@
 
   function queueKey(e, consume) {
     const k = e.key;
-    if (k === "ArrowLeft") { consume(); setFocus("mid"); return; }
+    if (k === "ArrowLeft") { consume(); setNext(false); setFocus("mid"); return; }
     if (k === "ArrowDown" || k === "ArrowUp") { consume(); moveActive(k === "ArrowDown" ? 1 : -1); return; }
     if (k === "Enter") { consume(); if (getActive() >= 0) activateNext(next.views[getActive()]); return; }
     if (k === "Backspace") {
@@ -1383,7 +1481,7 @@
     openCtx(e.clientX, e.clientY);
   }, true);
   // Album name / song title under the cover: ivLyrics links them to Spotify's
-  // album/track page (leaving fullscreen). Open the Alt+R album view instead.
+  // album/track page (leaving fullscreen). Open the album in the queue pane instead.
   const ALBUM_LINKS = [
     ".lyrics-fullscreen-album-name", ".fullscreen-tv-album-name", ".portrait-track-album-name",
     ".lyrics-fullscreen-title-container", ".fullscreen-tv-title-container",
@@ -1593,11 +1691,16 @@
     const orig = active ? lineText(active) : "";
     const tr = flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-translation")?.textContent);
     const dual = !!tr && lyr.english !== true;
-    const key = `${orig}\u0000${dual ? tr : ""}`;
+    // ivLyrics' loading pill (hidden) -> a quiet "loading <provider>…" line.
+    const pill = !orig && [...(fs?.querySelectorAll(".lyrics-generation-status-stack .lyrics-translation-loading-indicator") ?? [])]
+      .find((el) => !/complete|done|success|hidden/i.test(el.dataset.phase ?? ""));
+    const loading = pill ? flat(pill.querySelector(".lyrics-generation-status-loading-label")?.textContent).toLowerCase() || "lyrics" : "";
+    const key = `${orig}\u0000${dual ? tr : ""}\u0000${loading}`;
     if (key === lyr.key) return;
     lyr.key = key;
     lyr.el.classList.toggle("dual", dual);
-    lyr.el.innerHTML = orig ? `<div class="o">${esc(orig)}</div>${dual ? `<div class="t">${esc(tr)}</div>` : ""}` : "";
+    lyr.el.innerHTML = orig ? `<div class="o">${esc(orig)}</div>${dual ? `<div class="t">${esc(tr)}</div>` : ""}`
+      : loading ? `<div class="ld">loading ${esc(loading)}…</div>` : "";
     lyr.el.classList.remove("in");
     void lyr.el.offsetWidth; // restart the fade-in
     lyr.el.classList.add("in");
@@ -1609,13 +1712,14 @@
   // ivLyrics' hold-to-research, and moves focus to where you click. A click on
   // empty space in the middle also folds the queue away.
   const OWN_UI = "button, a, input, select, [role=button], [role=link], [role=slider], .fullscreen-progress-bar,"
-    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, #ivlib-tab";
+    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, .ivgrip, #ivhint-dot";
   window.addEventListener("pointerdown", (e) => {
     if (ctx.state && !ctx.el.contains(e.target)) closeCtx();
     if (sync.open && !sync.dlg.contains(e.target) && !sync.gear.contains(e.target)) closeSync();
     if (e.button === 2 && onAlbumCover(e)) { e.stopImmediatePropagation(); return; }
     if (e.button !== 0 || !document.body.classList.contains("ivlib-fs")) return;
-    if (e.target?.closest?.("#ivlib-panel, #ivlib-tab")) { setFocus("left"); return; }
+    if (e.target?.closest?.("#ivlib-panel, #ivlib-tab, #ivnext-tab")) return;
+    if (e.target?.closest?.("#ivlib-panel")) { setFocus("left"); return; }
     if (e.target?.closest?.("#ivnext-panel")) { setFocus("right"); return; }
     if (e.target?.closest?.(OWN_UI) || !e.target?.closest?.(FS_SELECTOR)) return;
     if (isOpen("right")) setNext(false);
@@ -1623,6 +1727,43 @@
   }, true);
 
   window.addEventListener("keydown", onKey, true);
+
+  // ---------- volume ----------
+  // Wheel anywhere over the fullscreen except the panes (they scroll) changes
+  // volume in steps of 2, snapped to even numbers. Trackpads accumulate.
+  const vol = { acc: 0, timer: null, el: $("ivvol") };
+  function stepVolume(d) {
+    const cur = Math.round(((Spicetify.Player.getVolume?.() ?? 1) * 100) / 2) * 2;
+    const v = Math.max(0, Math.min(100, cur + d));
+    Spicetify.Player.setVolume(v / 100);
+    vol.el.textContent = `vol ${v}`;
+    vol.el.classList.add("on");
+    clearTimeout(vol.timer);
+    vol.timer = setTimeout(() => vol.el.classList.remove("on"), 700);
+  }
+  window.addEventListener("wheel", (e) => {
+    if (!document.body.classList.contains("ivlib-fs")) return;
+    if (e.target?.closest?.("#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg")) return;
+    e.preventDefault();
+    e.stopImmediatePropagation(); // also keeps ivLyrics' wheel font-size change away
+    vol.acc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    while (Math.abs(vol.acc) >= 100) {
+      stepVolume(vol.acc < 0 ? 2 : -2);
+      vol.acc -= Math.sign(vol.acc) * 100;
+    }
+    if (Math.abs(e.deltaY) >= 100) vol.acc = 0;
+  }, { capture: true, passive: false });
+  // Each Spotify start begins at full volume; after that Spotify keeps whatever you set.
+  try { Spicetify.Player.setVolume(1); } catch {}
+
+  // ivLyrics' own fullscreen volume slider: switch it back on.
+  try {
+    if (window.CONFIG?.visual && window.CONFIG.visual["fullscreen-show-volume"] !== true) {
+      window.CONFIG.visual["fullscreen-show-volume"] = true;
+      localStorage.setItem("ivLyrics:visual:fullscreen-show-volume", "true");
+      window.dispatchEvent(new CustomEvent("ivLyrics", { detail: { type: "config", name: "fullscreen-show-volume", value: true } }));
+    }
+  } catch (e) { console.warn("[ivlyrics-sidecar] volume slider setting", e); }
 
   // ---------- launch API (used by playlist-home) ----------
   // Play a context, open ivLyrics fullscreen with the library panel, and come
@@ -1646,6 +1787,22 @@
       console.warn("[ivlyrics-sidecar] ivLyrics not ready, stayed on its page");
     },
   };
+
+  // Open ivLyrics fullscreen from anywhere (top-bar button).
+  async function enterFullscreen() {
+    if (document.body.classList.contains("ivlib-fs")) return;
+    if (!Spicetify.Platform.History.location.pathname.startsWith("/ivLyrics")) Spicetify.Platform.History.push("/ivLyrics");
+    for (let i = 0; i < 40; i++) {
+      const lc = window.lyricContainer;
+      if (typeof lc?.toggleFullscreen === "function") { if (!lc.state?.isFullscreen) lc.toggleFullscreen(); return; }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+  window.ivlib.enter = enterFullscreen;
+  try {
+    const icon = `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="3" height="10" rx=".8"/><rect x="5.5" y="2" width="5" height="12" rx="1"/><rect x="12" y="3" width="3" height="10" rx=".8"/></svg>`;
+    new Spicetify.Topbar.Button("ivLyrics deck", icon, () => enterFullscreen());
+  } catch (e) { console.warn("[ivlyrics-sidecar] top-bar button unavailable", e); }
 
   // Start on playlist-home (if installed) instead of Spotify's home feed.
   try {
