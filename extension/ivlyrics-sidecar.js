@@ -2,27 +2,22 @@
 // It never edits ivLyrics: it waits for ivLyrics fullscreen
 // (`.lyrics-lyricsContainer-LyricsContainer.fullscreen-active`) and layers on top.
 //
-// Left pane (Alt+L or the edge tab): your library. Playlists open in place,
-// newest tracks first; Backspace / Esc go up a level, then close the pane.
-// Browsing never changes playback: click selects, double-click plays, q (chip
-// or key) queues the track next, "back.." jumps to what's playing.
-// Search starts in the current view and widens on Y / Enter / Tab to all
-// playlists, then to Spotify.
+// Layout: library pane | player | queue pane. Both panes take the same slice
+// of the window so the centred player is never covered. ivLyrics' lyrics
+// column is hidden; the current line shows in a box above the player.
 //
-// Right pane (Alt+R): the queue around the current track; folds away like a
-// book cover. Opens by itself when a song has no lyrics. Album name, title,
-// artist name and the album-cover right-click menu open album / artist views
-// in it (arrows, Enter, Backspace / Esc).
+// Keys (one dispatcher, onKey): Space play/pause anywhere; Esc back to just
+// the player; ← / → move focus between library, middle and queue (opening the
+// pane); ↑ / ↓ move the selection in the focused pane; Enter goes one level in
+// or plays; Backspace goes one level back (closing the pane at the top).
+// Clicks only select; double-click = Enter.
 //
-// Focus moves between the queue and the middle: ← in the queue (or a click on
-// empty space in the middle) folds the queue away and parks a blinking caret
-// above the player; → from there reopens the queue, ← opens the library.
-// Space toggles play/pause anywhere in Spotify (except mid-word in a text box).
-// Lyrics side: clicking a line never seeks; a faint gear (level with play /
-// pause) opens a per-track sync-offset dialog.
-// Also: hides window buttons until hovered, removes the presentation switcher,
-// the "no lyrics" animation and the AI right-click, centres the album column,
-// tightens lyric spacing, and exposes window.ivlib.launch() for playlist-home.
+// Library: playlists open in place, newest tracks first; q queues a track next;
+// "back.." jumps to what's playing; search widens on Y / Enter / Tab from this
+// view to all playlists to Spotify. Queue: up next, plus album / artist views
+// from the title, album and artist links and the cover's right-click menu.
+// Also: per-track sync offset dialog (gear by the lyric box), hidden window
+// buttons until hovered, and window.ivlib.launch() for playlist-home.
 (function ivlyricsSidecar() {
   if (!window.Spicetify?.Platform?.LibraryAPI || !Spicetify.Player || !document.body) {
     setTimeout(ivlyricsSidecar, 300);
@@ -53,13 +48,6 @@
     :is(#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg) :is(input, button) { font-family: inherit; }
     #ivlib-root { display: none; }
     body.ivlib-fs #ivlib-root { display: block; }
-    /* Wide windows: push the lyrics over. Narrow: float over the album art. */
-    @media (min-width: 1100px) {
-      body.ivlib-fs.ivlib-open ${FS_SELECTOR} {
-        padding-left: var(--ivlib-w) !important;
-        transition: padding-left .22s ease;
-      }
-    }
     #ivlib-tab {
       position: fixed; left: 0; top: 50%; transform: translateY(-50%);
       z-index: 2147483647; width: 18px; height: 72px; border: 0; padding: 0;
@@ -134,7 +122,7 @@
     body.ivlib-fs .ivlib-corner-hide { visibility: hidden !important; }
 
     /* ---- right pane: tracks around the current one ---- */
-    /* The list fills the shared band (--ivnext-top/bottom, set by alignBand):
+    /* The list fills the shared band (--ivnext-top/bottom, set by layout()):
        at least 33%–66% of the height, stretched to the album column if taller. */
     /* Closed = folded back like a book cover, hinged on the divider (left edge):
        right edge swings away from the viewer, then fades. */
@@ -154,11 +142,10 @@
       transition: transform .15s cubic-bezier(.1, .6, .3, 1), opacity .05s linear;
     }
     body:not(.ivnext-open) #ivnext-list { pointer-events: none !important; }
-    /* No lyrics and pane folded: the album column slides to the centre (see
-       moveLeftX); the empty "no lyrics" page on the right goes away. */
-    body.ivlib-fs.ivlib-nolyrics:not(.ivnext-open) ${FS_SELECTOR} .lyrics-lyricsContainer-LyricsUnavailablePage { display: none !important; }
-    body.ivlib-fs.ivnext-open ${FS_SELECTOR} :is(.lyrics-lyricsContainer-SyncedLyricsPage, .lyrics-lyricsContainer-UnsyncedLyricsPage, .lyrics-lyricsContainer-LyricsUnavailablePage) {
-      visibility: hidden !important;
+    /* ivLyrics' lyrics column is replaced by the lyric box; it keeps running
+       (the box reads its active line) but is never shown or clickable. */
+    body.ivlib-fs ${FS_SELECTOR} :is(.lyrics-lyricsContainer-SyncedLyricsPage, .lyrics-lyricsContainer-UnsyncedLyricsPage, .lyrics-lyricsContainer-LyricsUnavailablePage) {
+      visibility: hidden !important; pointer-events: none !important;
     }
     #ivnext-list {
       position: absolute; left: 28px; right: 24px; padding: 6px 0; pointer-events: auto;
@@ -179,8 +166,9 @@
       mask-image: linear-gradient(transparent, #000 22%, #000 calc(50% - 16px), transparent calc(50% - 16px),
         transparent calc(50% + 16px), #000 calc(50% + 16px), #000 78%, transparent);
     }
-    /* Only between two columns: hidden in the single-column no-lyrics layout. */
-    body.ivlib-fs.ivlib-nolyrics:not(.ivnext-open) #ivnext-divider { display: none; }
+    /* Divider marks the queue pane's inner edge, so only while it's open. */
+    #ivnext-divider { display: none; }
+    body.ivlib-fs.ivnext-open #ivnext-divider { display: block; }
     #ivnext-divider .cog { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
     #ivnext-list .ivlib-row { opacity: .6; }
     #ivnext-list .ivlib-row:hover { opacity: 1; }
@@ -190,26 +178,6 @@
     /* Presentation switcher (standard/vinyl/video stage) pops up on album hover
        and is too easy to hit by accident. */
     .fullscreen-presentation-dock { display: none !important; }
-    /* Lyrics: current line one third from the top (ivLyrics default 0.5), and
-       row spacing from the real text size — ivLyrics steps rows by the legacy
-       base font-size setting (44px here) while the text is 20px. Scrolled view
-       gets the same tight gaps. */
-    ${FS_SELECTOR} { --ivfs-lyrics-anchor-ratio: 0.34 !important; }
-    ${FS_SELECTOR} .lyrics-lyricsContainer-SyncedLyrics {
-      --lyrics-line-height: calc(4px + var(--lyrics-original-font-size, var(--lyrics-font-size))) !important;
-      --scroll-line-gap: 8px !important;
-    }
-    /* Unsynced lyrics: 80% size, phrases packed, starting near the divider. */
-    ${FS_SELECTOR} > .lyrics-lyricsContainer-UnsyncedLyricsPage { padding-left: 24px !important; padding-right: 24px !important; }
-    ${FS_SELECTOR} .lyrics-lyricsContainer-UnsyncedLyricsPage .lyrics-lyricsContainer-LyricsLine {
-      font-size: calc(var(--lyrics-original-font-size, var(--lyrics-font-size)) * .8) !important;
-      margin-bottom: 2px !important;
-    }
-    ${FS_SELECTOR} .lyrics-lyricsContainer-UnsyncedLyricsPage .lyrics-lyricsContainer-LyricsLine-translation {
-      font-size: calc(var(--lyrics-translation-font-size, calc(var(--lyrics-font-size) * .7)) * .8) !important;
-      line-height: 1.3 !important;
-      margin-top: 0 !important;
-    }
     /* Album-cover right-click menu (replaces ivLyrics' AI "research"). */
     #ivlib-ctx {
       position: fixed; z-index: 2147483647; min-width: 200px; max-width: 280px; padding: 4px;
@@ -248,20 +216,16 @@
     .ivnext-album-title { font-size: 14px; font-weight: 700; }
     .ivnext-album-sub { font-size: 11px; opacity: .55; margin-top: 2px; }
     .ivlib-num { flex: none; width: 18px; text-align: right; font-size: 11px; opacity: .45; font-variant-numeric: tabular-nums; }
-    /* Middle focus: a thin blinking caret above the player, like an editor cursor. */
+    /* Middle focus: a thin blinking caret between the lyric box and the player. */
     #ivfocus-caret {
-      position: fixed; z-index: 2147483640; width: 2px; height: 16px; border-radius: 1px;
-      left: var(--ivcaret-x, 50vw); top: 12vh; transform: translateX(-50%);
+      position: fixed; z-index: 2147483640; width: 2px; height: 14px; border-radius: 1px;
+      left: 50vw; top: var(--ivcaret-y, 30vh); transform: translate(-50%, -50%);
       background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.7), 0 0 14px rgba(255,255,255,.3);
       display: none; pointer-events: none;
     }
     body.ivlib-fs.ivfocus-mid #ivfocus-caret { display: block; animation: ivcaret 1.06s steps(1, end) infinite; }
     @keyframes ivcaret { 0% { opacity: .55; } 50% { opacity: 0; } }
-    /* Lyric lines are not seek targets any more. */
-    ${FS_SELECTOR} :is(.lyrics-lyricsContainer-LyricsLine, .lyrics-lyricsContainer-LyricsLine-scrollView) { cursor: default !important; }
-    ${FS_SELECTOR} .lyrics-lyricsContainer-LyricsLine-scrollView:hover { transform: none !important; }
-
-    /* Sync gear: invisible until the pointer is on the lyrics side. */
+    /* Sync gear: right of the lyric box, invisible until the pointer is near it. */
     #ivsync-gear {
       position: fixed; z-index: 2147483646; width: 26px; height: 26px; padding: 4px; margin: -13px 0 0 0;
       border: 0; border-radius: 50%; background: transparent; color: #fff; cursor: pointer;
@@ -269,13 +233,13 @@
     }
     body.ivlib-fs.ivsync-hot #ivsync-gear { opacity: .22; pointer-events: auto; }
     body.ivlib-fs #ivsync-gear:hover, body.ivsync-open #ivsync-gear { opacity: .85; pointer-events: auto; background: rgba(255,255,255,.08); }
-    body.ivlib-fs.ivlib-nolyrics:not(.ivnext-open) #ivsync-gear { display: none; }
+    body.ivlib-fs.ivlib-nolyrics #ivsync-gear { display: none; }
     #ivsync-gear svg { width: 100%; height: 100%; display: block; }
 
-    /* Sync dialog, opening upward from the gear. */
+    /* Sync dialog, opening below the gear. */
     #ivsync-dlg {
       position: fixed; z-index: 2147483647; width: 236px; padding: 12px; box-sizing: border-box;
-      left: var(--ivsync-x, 50vw); bottom: var(--ivsync-y, 30vh);
+      left: var(--ivsync-x, 50vw); top: var(--ivsync-y, 30vh);
       border-radius: 10px; background: rgba(20,20,24,.96); box-shadow: 0 14px 40px rgba(0,0,0,.55);
       color: #fff; font-family: var(--ivmono); font-size: 12px;
       display: none;
@@ -308,6 +272,38 @@
     @keyframes ivsync-kick-later { 0% { transform: translateX(0); } 35% { transform: translateX(10px); } 100% { transform: translateX(0); } }
     .ivsync-readout.kick-earlier { animation: ivsync-kick-earlier .18s ease-out; }
     .ivsync-readout.kick-later { animation: ivsync-kick-later .18s ease-out; }
+    /* Lyric box: the current line only, between the panes, above the player.
+       English: the line alone. Other languages: tiny original + translation,
+       packed with no gap. */
+    #ivlyr-box {
+      position: fixed; z-index: 2147483640; left: 50vw; transform: translateX(-50%);
+      width: var(--ivlyr-w, 40vw); top: 3vh; bottom: var(--ivlyr-bottom, 70vh);
+      display: none; flex-direction: column; justify-content: center; align-items: center;
+      text-align: center; overflow: hidden; pointer-events: none; color: #fff; font-family: var(--ivmono);
+      text-shadow: 0 0 2px rgba(0,0,0,.8), 0 0 12px rgba(0,0,0,.55);
+    }
+    body.ivlib-fs #ivlyr-box { display: flex; }
+    #ivlyr-box > div { margin: 0; overflow-wrap: anywhere; }
+    #ivlyr-box .o { font-size: 15px; font-weight: 700; line-height: 1.3; }
+    #ivlyr-box.dual .o { font-size: 8px; font-weight: 500; line-height: 1.15; opacity: .75; letter-spacing: -.01em; }
+    #ivlyr-box.dual .t { font-size: 10px; font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
+    #ivlyr-box.in > div { animation: ivlyr-in .14s ease-out; }
+    @keyframes ivlyr-in { from { opacity: 0; transform: translateY(3px); } }
+
+    /* Focus: the focused pane gets a soft glowing line on its inner edge; the
+       other pane's selection dims. The middle shows the caret instead. */
+    #ivlib-panel::after, #ivnext-panel::after {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 2px; opacity: 0; pointer-events: none;
+      background: linear-gradient(transparent, rgba(255,255,255,.55) 25%, rgba(255,255,255,.55) 75%, transparent);
+      box-shadow: 0 0 8px rgba(255,255,255,.35); transition: opacity .15s ease;
+    }
+    #ivlib-panel::after { right: -1px; }
+    #ivnext-panel::after { left: 0; }
+    body.ivfocus-left #ivlib-panel::after, body.ivfocus-right #ivnext-panel::after { opacity: 1; }
+    #ivnext-list .ivlib-row.active { background: rgba(255,255,255,.12); box-shadow: inset 2px 0 0 rgba(255,255,255,.6); opacity: 1; }
+    body:not(.ivfocus-left) #ivlib-list .ivlib-row.sel { background: rgba(255,255,255,.05); box-shadow: inset 2px 0 0 rgba(255,255,255,.2); }
+    body:not(.ivfocus-right) #ivnext-list .ivlib-row.active { background: rgba(255,255,255,.05); box-shadow: inset 2px 0 0 rgba(255,255,255,.2); }
+
     /* ivLyrics' "LYRICS PROVIDER <name>" footer: gone. */
     .lyrics-lyricsContainer-Provider { display: none !important; }
     /* ivLyrics' floating-notes "no lyrics" animation: never. */
@@ -329,6 +325,7 @@
     <div id="ivnext-divider"><div class="zip"></div><svg class="cog" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.3"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="white" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></div>
     <div id="ivlib-ctx" hidden></div>
     <div id="ivfocus-caret"></div>
+    <div id="ivlyr-box"></div>
     <button id="ivsync-gear" title="Lyrics sync offset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="currentColor" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></button>
     <div id="ivsync-dlg"></div>
     <aside id="ivnext-panel">
@@ -660,8 +657,8 @@
       list.scrollTop = 0;
       loadLibrary();
     } else {
-      input.blur();
       setOpen(false);
+      setFocus("mid");
     }
   }
 
@@ -801,162 +798,35 @@
     localStorage.setItem(STORE_OPEN, open ? "1" : "0");
     document.body.classList.toggle("ivlib-open", open);
     tab.textContent = open ? "◂" : "▸";
-    setTimeout(() => document.body.classList.contains("ivnext-open") && sizeNext(), 250); // after the push transition
     if (open && !state.items?.length) loadLibrary();
   }
 
-  // ---------- events ----------
-  tab.addEventListener("click", () => setOpen(!state.open));
+  // ---------- library pointer events ----------
+  tab.addEventListener("click", () => {
+    if (!state.open) return focusZone("left");
+    setOpen(false);
+    if (focus.zone === "left") setFocus(null);
+  });
   back.addEventListener("click", goUp);
   nowBtn.addEventListener("click", goToNow);
+  // A click only selects; Enter or a double-click goes in / plays.
   list.addEventListener("click", (e) => {
     const row = e.target.closest(".ivlib-row");
     if (!row) return;
-    const v = listViews[+row.dataset.i];
-    setTimeout(() => input.focus({ preventScroll: true }), 0);
+    const i = +row.dataset.i, v = listViews[i];
     if (e.target.closest(".ivlib-q")) return queueNext(v, row);
-    // Tracks: a click only selects, so browsing never interrupts playback.
-    if (v?.type === "track") { state.sel = +row.dataset.i; markSel(); return; }
-    activate(v);
+    if (v?.type === "widen") return widen();
+    if (search.q) { search.active = i; renderSearch(); } else { state.sel = i; markSel(); }
   });
   list.addEventListener("dblclick", (e) => {
     const row = e.target.closest(".ivlib-row");
     const v = row && listViews[+row.dataset.i];
-    if (v?.type === "track" && !e.target.closest(".ivlib-q")) activate(v);
+    if (v && v.type !== "widen" && !e.target.closest(".ivlib-q")) activate(v);
   });
   input.addEventListener("input", onQuery);
-  // Keep typing from triggering Spotify / ivLyrics shortcuts (space, F12…).
-  input.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    // → at the end of the text: close the library, focus the middle.
-    if (e.key === "ArrowRight" && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
-      e.preventDefault();
-      input.blur();
-      setOpen(false);
-      setFocus("mid");
-      return;
-    }
-    if (!search.q) {
-      // Browsing: arrows move the selection, Enter opens / plays, Q (empty box) queues next.
-      const n = listViews.length;
-      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
-        e.preventDefault();
-        let i = state.sel;
-        if (i < 0) {
-          const playing = listViews.findIndex((v) => v.uri === Spicetify.Player.data?.item?.uri);
-          i = playing >= 0 ? playing : e.key === "ArrowDown" ? -1 : n;
-        }
-        state.sel = Math.max(0, Math.min(n - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
-        markSel();
-        list.querySelector(".ivlib-row.sel")?.scrollIntoView({ block: "nearest" });
-      } else if (e.key === "Enter" && state.sel >= 0) {
-        e.preventDefault();
-        activate(listViews[state.sel]);
-      } else if ((e.key === "q" || e.key === "Q") && !input.value && listViews[state.sel]?.type === "track") {
-        e.preventDefault();
-        queueNext(listViews[state.sel], list.querySelector(".ivlib-row.sel"));
-      }
-      return;
-    }
-    const n = listViews.length;
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      if (!n) return;
-      search.active = (search.active + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
-      renderSearch();
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (search.active >= 0) activate(listViews[search.active]);
-      else if (!resultCount()) widen();
-      else activate(listViews[0]);
-    } else if ((e.key === "y" || e.key === "Y") && !resultCount() && listViews.some((v) => v.type === "widen")) {
-      e.preventDefault(); // "y" answers the prompt instead of typing
-      widen();
-    }
-  });
-  ["keyup", "keypress"].forEach((t) => input.addEventListener(t, (e) => e.stopPropagation()));
-
-  window.addEventListener("keydown", (e) => {
-    // Space = play/pause anywhere in Spotify. Only exception: a text box that
-    // already has text, so multi-word searches can still be typed.
-    if (e.code === "Space" && !e.altKey && !e.ctrlKey && !e.metaKey) {
-      const field = e.target?.matches?.("input, textarea, [contenteditable='true']") ? e.target : null;
-      const typingWords = field && (field.value ?? field.textContent ?? "").length > 0;
-      if (!typingWords) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        if (!e.repeat) Spicetify.Player.togglePlay();
-        return;
-      }
-    }
-    if (syncKeys(e)) return;
-    if ((e.key === "q" || e.key === "Q") && !e.altKey && !e.ctrlKey && state.open
-        && document.body.classList.contains("ivlib-fs")
-        && !e.target?.matches?.("input, textarea, [contenteditable='true']")
-        && listViews[state.sel]?.type === "track") {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      queueNext(listViews[state.sel], list.querySelector(".ivlib-row.sel"));
-      return;
-    }
-    // Tab in the search box widens the search scope (here -> playlists -> Spotify).
-    if (e.key === "Tab" && e.target === input && search.q) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      widen();
-      return;
-    }
-    const consume = () => { e.preventDefault(); e.stopImmediatePropagation(); };
-    const isBack = (e.key === "Escape" || e.key === "Backspace") && !e.altKey && !e.ctrlKey;
-    // Open right-click menu: Esc/Backspace step back (playlist picker -> menu -> closed).
-    if (ctx.state) {
-      const inFilter = e.target === ctx.filterEl;
-      if (isBack && !(e.key === "Backspace" && inFilter && ctx.filterEl.value)) { consume(); ctxBack(); return; }
-      if (e.key === "Enter" && inFilter) { consume(); ctx.views[0]?.act(); return; }
-      if (inFilter) return;
-    }
-    const typing = e.target?.matches?.("input, textarea, [contenteditable='true']");
-    // Middle focus (caret showing): → opens the queue, ← opens the library.
-    if (focus.zone === "mid" && !typing && !e.altKey && !e.ctrlKey && !e.metaKey
-        && document.body.classList.contains("ivlib-fs") && !document.body.classList.contains("ivnext-open")) {
-      if (e.key === "ArrowRight") { consume(); toggleNext(true); setFocus("right"); return; }
-      if (e.key === "ArrowLeft") { consume(); setFocus(null); setOpen(true); setTimeout(() => input.focus(), 50); return; }
-    }
-    // Right pane (when open, not typing): Esc/Backspace up a level, arrows
-    // move the highlight, Enter opens a release / plays a track.
-    if (!typing && !e.altKey && !e.ctrlKey && !e.metaKey
-        && document.body.classList.contains("ivnext-open") && document.body.classList.contains("ivlib-fs")) {
-      if (isBack && next.stack.length) { consume(); popNest(); return; }
-      if (e.key === "ArrowLeft") { consume(); toggleNext(false); setFocus("mid"); return; }
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") { consume(); moveActive(e.key === "ArrowDown" ? 1 : -1); return; }
-      if (e.key === "Enter" && getActive() >= 0) { consume(); activateNext(next.views[getActive()]); return; }
-    }
-    // Backspace / Esc: clear search, else up one level, else close the pane.
-    // Capture phase on window runs before ivLyrics' Esc (exit fullscreen).
-    if ((e.key === "Escape" || e.key === "Backspace") && !e.altKey && !e.ctrlKey
-        && state.open && document.body.classList.contains("ivlib-fs")) {
-      const t = e.target;
-      const otherField = t !== input && t?.matches?.("input, textarea, [contenteditable='true']");
-      if (otherField) return;
-      if (t === input && input.value) {
-        if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); clearSearch(); renderList(); }
-        return; // Backspace edits the text
-      }
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      goUp();
-      return;
-    }
-    if (e.altKey && !e.ctrlKey && e.code === "KeyL" && document.body.classList.contains("ivlib-fs")) {
-      e.preventDefault();
-      setOpen(!state.open);
-      if (state.open) { setFocus(null); setTimeout(() => input.focus(), 50); }
-    }
-    if (e.altKey && !e.ctrlKey && e.code === "KeyR" && document.body.classList.contains("ivlib-fs")) {
-      e.preventDefault();
-      toggleNext(!document.body.classList.contains("ivnext-open"));
-    }
-  }, true);
+  // Keys are handled by onKey (window, capture). Stop them here so Spotify's
+  // own shortcuts never see typing in the search box.
+  ["keydown", "keyup", "keypress"].forEach((t) => input.addEventListener(t, (e) => e.stopPropagation()));
 
   // Library changed elsewhere → refresh.
   try {
@@ -1018,11 +888,7 @@
 
   // ---------- right pane: tracks around the current one ----------
   const nextPanel = $("ivnext-panel"), nextList = $("ivnext-list"), crumb = $("ivnext-crumb"), hint = $("ivnext-hint");
-  // dismissedUri: track whose no-lyrics auto-open the user closed with Alt+R.
-  const next = {
-    pinned: false, auto: false, views: [], timer: null, noLyricsSince: 0, dismissedUri: null,
-    animating: false, holdUntil: 0, stack: [], qActive: -1, rendered: null,
-  };
+  const next = { views: [], timer: null, bandTimer: null, stack: [], qActive: -1, rendered: null };
   // Top of the nest (null = queue). Assigning replaces the whole path.
   Object.defineProperty(next, "view", {
     get() { return this.stack.at(-1) ?? null; },
@@ -1112,9 +978,8 @@
     if (!entry?.uri) return;
     const node = { ...entry, loading: true, active: -1, rows: [] };
     next.stack = push ? [...next.stack, node] : [node];
-    next.pinned = true;
-    next.dismissedUri = null;
     if (document.body.classList.contains("ivnext-open")) renderNext(); else setNext(true);
+    setFocus("right");
     try { Object.assign(node, entry.kind === "artist" ? await loadArtist(entry.uri) : await loadAlbum(entry.uri)); }
     catch (e) { console.warn(`[ivlyrics-sidecar] ${entry.kind} load failed`, e); node.error = true; }
     node.loading = false;
@@ -1154,7 +1019,7 @@
 
   function renderNext() {
     crumb.textContent = "/" + ["queue", ...next.stack.map((n) => n.name ?? "…")].join("/");
-    hint.textContent = next.stack.length ? "esc back · alt+r close" : "alt+r to close";
+    hint.textContent = next.stack.length ? "⌫ back · esc player" : "⌫ close · esc player";
     if (next.view) { renderNest(); markActive(); return; }
     next.rendered = null;
     const { cur, nxt } = queueSnapshot();
@@ -1224,162 +1089,199 @@
     }
   }
 
-  // Lyrics column sits right of the album panel; size the pane to match it.
-  // Both panes share one width: the average of the library pane's base width
-  // and the lyrics column (half the window). Based on the window only, so the
-  // library pane pushing the layout can't feed back into it.
-  function sizeNext() {
-    const w = Math.max(240, Math.round((PANEL_W + window.innerWidth / 2) / 2));
-    const css = document.documentElement.style;
-    css.setProperty("--ivnext-w", `${w}px`);
-    css.setProperty("--ivlib-w", `${w}px`);
-  }
-
-  // Centre ivLyrics' album column (art -> controls) on the window's midline,
-  // then size the list band to the larger of 33%-66% and that column, so both
-  // sides share top and bottom edges. Uses the `translate` property so it
-  // doesn't fight ivLyrics' own transform animations.
+  // ---------- layout ----------
+  // Library | player | queue. Both panes are the same width (27.5% of the
+  // window, 200-380px) so the centred player never sits under one. The player
+  // block (cover to controls) is moved with `translate`, leaving room above it
+  // for the lyric box. The queue list fills the band from 33% to 66% of the
+  // height, or the player's full height if that's taller.
   const leftPanel = () => document.querySelector(`${FS_SELECTOR} .lyrics-fullscreen-left-panel`);
-  // Horizontal: centred across the free area when there are no lyrics and the
-  // right pane is folded, else ivLyrics' own column. Moves between the two are
-  // animated (moveLeftX); resizes snap.
-  const wantCentered = () => document.body.classList.contains("ivlib-nolyrics") && !document.body.classList.contains("ivnext-open");
+  const paneWidth = () => Math.round(Math.min(380, Math.max(200, window.innerWidth * 0.275)));
   function readShift(lp) {
     const [x, y] = (lp.style.translate || "0px 0px").split(" ").map((v) => parseFloat(v) || 0);
     return { x, y };
   }
-  function alignBand({ animate = true } = {}) {
-    sizeNext();
-    placeGear();
-    if (focus.zone === "mid") placeCaret();
-    const H = window.innerHeight;
-    let top = H * 0.33, bottom = H * 0.66;
+
+  function layout() {
+    const css = document.documentElement.style;
+    const W = window.innerWidth, H = window.innerHeight, pw = paneWidth();
+    css.setProperty("--ivlib-w", `${pw}px`);
+    css.setProperty("--ivnext-w", `${pw}px`);
+    let top = H * 0.33, bottom = H * 0.66, playerTop = H * 0.3;
     const lp = leftPanel();
-    if (next.animating && Date.now() > (next.animUntil ?? 0)) next.animating = false;
-    if (lp && !next.animating) {
+    if (lp) {
       const rects = [...lp.querySelectorAll(".lyrics-fullscreen-left-content, .fullscreen-left-controls")]
         .map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
       if (rects.length) {
         const cur = readShift(lp);
         const cTop = Math.min(...rects.map((r) => r.top)) - cur.y;
         const cBot = Math.max(...rects.map((r) => r.bottom)) - cur.y;
-        const y = Math.round(H / 2 - (cTop + cBot) / 2);
-        let x = 0;
-        if (wantCentered()) {
-          const fs = document.querySelector(FS_SELECTOR);
-          const fr = fs.getBoundingClientRect();
-          const pl = parseFloat(getComputedStyle(fs).paddingLeft) || 0;
-          const cMid = (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2 - cur.x;
-          x = Math.round(fr.left + pl + (fr.width - pl) / 2 - cMid);
-        }
-        if (Math.abs(x - cur.x) > 24 && animate && Date.now() >= next.holdUntil) moveLeftX(lp, cur.x, x, y);
-        else if (Math.abs(x - cur.x) > 1 || Math.abs(y - cur.y) > 1) {
-          if (Date.now() >= next.holdUntil || Math.abs(x - cur.x) <= 24) lp.style.translate = `${x}px ${y}px`;
-        }
-        top = Math.min(top, cTop + y);
-        bottom = Math.max(bottom, cBot + y);
+        const cMid = (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2 - cur.x;
+        const h = cBot - cTop;
+        // Top at 28% (room for the lyric box) unless that pushes it off-screen.
+        let pTop = Math.max(H * 0.28, (H - h) / 2);
+        if (pTop + h > H - 12) pTop = Math.max(8, H - 12 - h);
+        const x = Math.round(W / 2 - cMid), y = Math.round(pTop - cTop);
+        if (Math.abs(x - cur.x) > 1 || Math.abs(y - cur.y) > 1) lp.style.translate = `${x}px ${y}px`;
+        top = Math.min(top, pTop);
+        bottom = Math.max(bottom, pTop + h);
+        playerTop = pTop;
       }
     }
-    const css = document.documentElement.style;
     css.setProperty("--ivnext-top", `${Math.max(8, Math.round(top))}px`);
     css.setProperty("--ivnext-bottom", `${Math.max(8, Math.round(H - bottom))}px`);
+    css.setProperty("--ivlyr-w", `${Math.max(160, Math.min(440, W - 2 * pw - 48))}px`);
+    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 16)}px`);
+    css.setProperty("--ivcaret-y", `${Math.round(playerTop - 8)}px`);
+    placeGear();
   }
 
-  // Album column move: slow start, hard acceleration, heavy braking, a snap
-  // over the last few px, then a small landing shake. 140ms + 90ms shake.
-  const MOVE_MS = 140, FOLD_MS = 150;
-  function moveLeftX(lp, from, to, y) {
-    next.animating = true;
-    next.animUntil = Date.now() + MOVE_MS + 260; // watchdog if an animation never ends
-    const sgn = Math.sign(to - from) || 1;
-    const near = to - sgn * Math.min(5, Math.abs(to - from) * 0.04);
-    const move = lp.animate([
-      { translate: `${from}px ${y}px`, easing: "cubic-bezier(.8, 0, .15, 1)" },
-      { translate: `${near}px ${y}px`, offset: 0.86, easing: "linear" },
-      { translate: `${to}px ${y}px` },
-    ], { duration: MOVE_MS, fill: "forwards" });
-    move.onfinish = () => {
-      lp.style.translate = `${to}px ${y}px`;
-      move.cancel();
-      const shake = lp.animate([
-        { translate: `${to}px ${y}px` },
-        { translate: `${to + sgn * 3}px ${y}px` },
-        { translate: `${to - sgn * 1.5}px ${y}px` },
-        { translate: `${to + sgn * 0.6}px ${y}px` },
-        { translate: `${to}px ${y}px` },
-      ], { duration: 90, easing: "ease-out" });
-      shake.onfinish = shake.oncancel = () => { next.animating = false; };
-    };
-    // ivLyrics can rebuild the column mid-move; never stay locked.
-    move.oncancel = () => { if (!lp.isConnected || lp.style.translate !== `${to}px ${y}px`) next.animating = false; };
-  }
-
-  function setNext(open, opts = {}) {
-    const lp = leftPanel();
-    if (next.animating && Date.now() > (next.animUntil ?? 0)) next.animating = false;
-    const centered = lp && Math.abs(readShift(lp).x) > 24;
-    if (open && centered && !next.animating) {
-      // Player leaves the centre first; the pane unfolds behind it, chasing.
-      const { x, y } = readShift(lp);
-      moveLeftX(lp, x, 0, y);
-      setTimeout(() => applyNext(true, opts), MOVE_MS * 0.6);
-      return;
-    }
-    applyNext(open, opts);
-    if (!open) {
-      // Fold first; only then may the player slide to the centre.
-      next.holdUntil = Date.now() + FOLD_MS;
-      setTimeout(() => alignBand(), FOLD_MS + 5);
-    }
-  }
-
-  function applyNext(open, { auto = false } = {}) {
-    next.auto = open && auto;
+  // ---------- queue pane open / close ----------
+  // Folds like a book cover (CSS). The queue re-renders every 4s while open
+  // because it has no reliable change event; album / artist views are static.
+  function setNext(open) {
     document.body.classList.toggle("ivnext-open", open);
     clearInterval(next.timer);
     if (open) {
-      sizeNext();
-      alignBand();
+      layout();
       renderNext();
-      setTimeout(sizeNext, 500); // grid may still be animating back from single column
-      // Queue has no reliable change event; the album view is static.
       next.timer = setInterval(() => { if (!next.view) renderNext(); }, 4000);
     } else {
       next.view = null;
     }
   }
 
-  // One way to open/close the queue pane for keys and clicks. Closing it on a
-  // song keeps it closed (no auto-reopen) until the next song.
-  function toggleNext(open) {
-    next.pinned = open;
-    next.dismissedUri = open ? null : Spicetify.Player.data?.item?.uri ?? null;
-    setNext(open);
-  }
-
-  // ---------- focus: queue <-> middle ----------
-  const focus = { zone: null, caret: $("ivfocus-caret") };
+  // ---------- focus: library | middle | queue ----------
+  // One zone has the keyboard. The library zone keeps the typing cursor in
+  // its search box; moving into a pane opens it.
+  const ZONES = ["left", "mid", "right"];
+  const focus = { zone: null };
+  const isOpen = (zone) => (zone === "left" ? state.open : zone === "right" ? document.body.classList.contains("ivnext-open") : true);
   function setFocus(zone) {
     focus.zone = zone;
-    document.body.classList.toggle("ivfocus-mid", zone === "mid");
-    if (zone === "mid") placeCaret();
+    for (const z of ZONES) document.body.classList.toggle(`ivfocus-${z}`, zone === z);
+    if (zone === "left") setTimeout(() => input.focus({ preventScroll: true }), 0);
+    else if (document.activeElement === input) input.blur();
   }
-  // Caret sits over the player column's centre line.
-  function placeCaret() {
-    const r = leftPanel()?.querySelector(".lyrics-fullscreen-left-content")?.getBoundingClientRect();
-    if (r?.width) document.documentElement.style.setProperty("--ivcaret-x", `${Math.round(r.left + r.width / 2)}px`);
+  function focusZone(zone) {
+    if (zone === "left" && !state.open) setOpen(true);
+    if (zone === "right" && !isOpen("right")) setNext(true);
+    setFocus(zone);
   }
-  // Left click on empty space in the middle: fold the queue away, focus the middle.
-  // Controls, links, the cover and the sidecar's own UI keep their normal clicks.
-  const OWN_UI = "button, a, input, select, [role=button], [role=link], [role=slider], .fullscreen-progress-bar,"
-    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, #ivlib-tab";
-  window.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || !document.body.classList.contains("ivlib-fs")) return;
-    if (e.target?.closest?.("#ivnext-panel")) { setFocus("right"); return; }
-    if (e.target?.closest?.(OWN_UI) || !e.target?.closest?.(FS_SELECTOR)) return;
-    if (document.body.classList.contains("ivnext-open")) toggleNext(false);
-    setFocus("mid");
-  }, true);
+  // Esc: back to just the player.
+  function resetView() {
+    closeSync();
+    closeCtx();
+    if (search.q || input.value) { clearSearch(); renderList(); }
+    if (state.open) setOpen(false);
+    if (isOpen("right")) setNext(false);
+    setFocus(null);
+  }
+
+  // ---------- keys: one dispatcher, in this order ----------
+  // 1 Space  2 Esc  3 open dialogs  4 Alt+L / Alt+R  5 the focused zone.
+  function onKey(e) {
+    const fs = document.body.classList.contains("ivlib-fs");
+    const mod = e.altKey || e.ctrlKey || e.metaKey;
+    const consume = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+    const field = e.target?.matches?.("input, textarea, [contenteditable='true']") ? e.target : null;
+
+    // 1. Space: play/pause anywhere in Spotify, except mid-text in a text box.
+    if (e.code === "Space" && !mod && !(field && (field.value ?? field.textContent ?? "").length)) {
+      consume();
+      if (!e.repeat) Spicetify.Player.togglePlay();
+      return;
+    }
+    if (!fs) return;
+    // 2. Esc: everything closed, just the player.
+    if (e.key === "Escape" && !mod) { consume(); resetView(); return; }
+    // Text fields that aren't ours keep their keys.
+    if (field && field !== input && field !== ctx.filterEl) return;
+    // 3. Open dialogs.
+    if (syncKeys(e)) return;
+    if (ctx.state) {
+      const inFilter = e.target === ctx.filterEl;
+      if (e.key === "Backspace" && !(inFilter && ctx.filterEl.value)) { consume(); ctxBack(); return; }
+      if (e.key === "Enter" && inFilter) { consume(); ctx.views[0]?.act(); return; }
+      if (inFilter) return;
+    }
+    // 4. Pane toggles.
+    if (e.altKey && !e.ctrlKey && (e.code === "KeyL" || e.code === "KeyR")) {
+      consume();
+      const zone = e.code === "KeyL" ? "left" : "right";
+      if (!isOpen(zone)) return focusZone(zone);
+      if (zone === "left") setOpen(false); else setNext(false);
+      if (focus.zone === zone) setFocus(null);
+      return;
+    }
+    if (mod) return;
+    // 5. The focused zone (a closed pane counts as the middle).
+    const zone = focus.zone && isOpen(focus.zone) ? focus.zone : "mid";
+    if (zone === "left") return libraryKey(e, consume);
+    if (zone === "right") return queueKey(e, consume);
+    if (e.key === "ArrowLeft") { consume(); focusZone("left"); }
+    else if (e.key === "ArrowRight") { consume(); focusZone("right"); }
+  }
+
+  function libraryKey(e, consume) {
+    const k = e.key;
+    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    if (k === "ArrowRight" && (e.target !== input || atEnd)) { consume(); setFocus("mid"); return; }
+    if (search.q) {
+      // Search results.
+      const n = listViews.length;
+      if (k === "Tab") { consume(); widen(); return; }
+      if (k === "ArrowDown" || k === "ArrowUp") {
+        consume();
+        if (n) { search.active = Math.max(0, Math.min(n - 1, (search.active < 0 ? -1 : search.active) + (k === "ArrowDown" ? 1 : -1))); renderSearch(); }
+        return;
+      }
+      if (k === "Enter") {
+        consume();
+        if (search.active >= 0) activate(listViews[search.active]);
+        else if (!resultCount()) widen();
+        else activate(listViews[0]);
+        return;
+      }
+      if ((k === "y" || k === "Y") && !resultCount() && listViews.some((v) => v.type === "widen")) { consume(); widen(); }
+      return; // anything else types / edits
+    }
+    // Browsing.
+    const n = listViews.length;
+    if ((k === "ArrowDown" || k === "ArrowUp") && n) {
+      consume();
+      let i = state.sel;
+      if (i < 0) {
+        const playing = listViews.findIndex((v) => v.uri === Spicetify.Player.data?.item?.uri);
+        i = playing >= 0 ? playing : k === "ArrowDown" ? -1 : n;
+      }
+      state.sel = Math.max(0, Math.min(n - 1, i + (k === "ArrowDown" ? 1 : -1)));
+      markSel();
+      list.querySelector(".ivlib-row.sel")?.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    if (k === "Enter") { consume(); if (state.sel >= 0) activate(listViews[state.sel]); return; }
+    if (k === "Backspace" && !input.value) { consume(); goUp(); return; }
+    if ((k === "q" || k === "Q") && !input.value && listViews[state.sel]?.type === "track") {
+      consume();
+      queueNext(listViews[state.sel], list.querySelector(".ivlib-row.sel"));
+      return;
+    }
+    // Printable keys type into the search box even if it lost focus.
+    if (k.length === 1 && e.target !== input) input.focus({ preventScroll: true });
+  }
+
+  function queueKey(e, consume) {
+    const k = e.key;
+    if (k === "ArrowLeft") { consume(); setFocus("mid"); return; }
+    if (k === "ArrowDown" || k === "ArrowUp") { consume(); moveActive(k === "ArrowDown" ? 1 : -1); return; }
+    if (k === "Enter") { consume(); if (getActive() >= 0) activateNext(next.views[getActive()]); return; }
+    if (k === "Backspace") {
+      consume();
+      if (next.stack.length) popNest();
+      else { setNext(false); setFocus("mid"); }
+    }
+  }
 
   // ---------- album-cover right-click menu ----------
   const ctx = { el: $("ivlib-ctx"), state: null, views: [], filterEl: null, editable: null };
@@ -1514,70 +1416,44 @@
   window.addEventListener("click", openArtistFromLink, true);
   window.addEventListener("keydown", openArtistFromLink, true);
 
-  window.addEventListener("pointerdown", (e) => {
-    if (ctx.state && !ctx.el.contains(e.target)) closeCtx();
-    if (e.button === 2 && onAlbumCover(e)) e.stopImmediatePropagation(); // no hold-to-research timer
-  }, true);
 
-  // The album column stays centred for the whole fullscreen session, so
-  // opening/closing Alt+R never moves it. Controls auto-hide and title length
-  // change its height, hence the polling.
+  // Layout is re-measured every 300ms in fullscreen: controls auto-hide and
+  // title length change the player's height.
   function startBand(on) {
     clearInterval(next.bandTimer);
-    if (on) { sizeNext(); alignBand({ animate: false }); next.bandTimer = setInterval(alignBand, 300); }
+    if (on) { layout(); next.bandTimer = setInterval(layout, 300); }
   }
 
-  // No lyrics -> open by itself; lyrics come back -> close if we opened it.
+  // Marks songs without lyrics (hides the sync gear).
   function checkLyricsState() {
     if (!document.body.classList.contains("ivlib-fs")) return;
     const fs = document.querySelector(FS_SELECTOR);
     const none = !!fs?.querySelector(".lyrics-lyricsContainer-LyricsUnavailablePage") && !fs.classList.contains("fullscreen-lyrics-loading");
-    const isOpen = document.body.classList.contains("ivnext-open");
-    if (document.body.classList.contains("ivlib-nolyrics") !== none) {
-      document.body.classList.toggle("ivlib-nolyrics", none);
-      setTimeout(() => alignBand(), 0);
-    }
-    if (none) {
-      next.noLyricsSince ||= Date.now();
-      // Debounce: track changes flash the unavailable page briefly.
-      const uri = Spicetify.Player.data?.item?.uri;
-      if (!isOpen && uri !== next.dismissedUri && Date.now() - next.noLyricsSince > 700) setNext(true, { auto: true });
-    } else {
-      next.noLyricsSince = 0;
-      if (isOpen && next.auto && !next.pinned) setNext(false);
-    }
+    document.body.classList.toggle("ivlib-nolyrics", none);
   }
-  // Mutations stop when nothing animates; poll too so the debounce can finish.
   setInterval(checkLyricsState, 500);
 
+  // Queue list: a click selects, Enter or a double-click plays / opens.
+  const rowIndex = (e) => { const row = e.target.closest(".ivlib-row"); return row ? +row.dataset.i : -1; };
   nextList.addEventListener("click", (e) => {
-    const row = e.target.closest(".ivlib-row");
-    if (!row) return;
-    setActive(+row.dataset.i);
-    activateNext(next.views[+row.dataset.i]);
+    const i = rowIndex(e);
+    if (i < 0) return;
+    setActive(i);
+    markActive();
   });
-  window.addEventListener("resize", () => {
-    if (!document.body.classList.contains("ivlib-fs")) return;
-    sizeNext();
-    alignBand();
+  nextList.addEventListener("dblclick", (e) => {
+    const i = rowIndex(e);
+    if (i >= 0) activateNext(next.views[i]);
   });
+  window.addEventListener("resize", () => { if (document.body.classList.contains("ivlib-fs")) layout(); });
   Spicetify.Player.addEventListener("songchange", () => {
     if (document.body.classList.contains("ivnext-open")) setTimeout(renderNext, 300);
   });
 
-  // ---------- lyric clicks: never seek ----------
-  // ivLyrics jumps the song to a line when you click it. Swallow those clicks.
-  const LINE_SEL = `${FS_SELECTOR} :is(.lyrics-lyricsContainer-LyricsLine, .lyrics-lyricsContainer-LyricsLine-scrollView)`;
-  window.addEventListener("click", (e) => {
-    if (!document.body.classList.contains("ivlib-fs") || !e.target?.closest?.(LINE_SEL)) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-  }, true);
-
   // ---------- lyrics sync offset: gear + dialog ----------
-  // A faint gear on the lyrics side, level with play/pause, shows while the
-  // pointer is over that side. It opens a dialog that nudges this track's
-  // lyrics earlier (+) or later (-) through ivLyrics' own per-track offset.
+  // A faint gear right of the lyric box shows while the pointer is near the
+  // box. It opens a dialog that nudges this track's lyrics earlier (+) or
+  // later (-) through ivLyrics' own per-track offset.
   const SYNC_STEPS = [10, 50, 100, 250, 500, 1000];
   const SYNC_LIMIT = 10000; // ivLyrics clamps to +-10s
   const sync = {
@@ -1587,17 +1463,16 @@
   const syncApi = () => window.Utils;
   const fmtOffset = (ms) => `${ms > 0 ? "+" : ms < 0 ? "−" : ""}${Math.abs(ms)} ms`;
 
-  // Gear sits at the left edge of the lyrics column, on the play button's line.
+  // Gear: just right of the lyric box, at its vertical middle; dialog below it.
   function placeGear() {
-    const g = sync.gear.getBoundingClientRect();
-    if (g.width) {
-      document.documentElement.style.setProperty("--ivsync-x", `${Math.round(Math.min(g.left, window.innerWidth - 248))}px`);
-      document.documentElement.style.setProperty("--ivsync-y", `${Math.round(window.innerHeight - g.top + 10)}px`);
-    }
-    const play = document.querySelector(`${FS_SELECTOR} .fullscreen-control-play`);
-    const r = play?.getBoundingClientRect();
-    if (r?.height) sync.gear.style.top = `${Math.round(r.top + r.height / 2)}px`;
-    sync.gear.style.left = `${Math.round(window.innerWidth - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ivnext-w")) || window.innerWidth / 2) + 34)}px`;
+    const b = $("ivlyr-box").getBoundingClientRect();
+    if (!b.height) return;
+    const mid = Math.round(b.top + b.height / 2);
+    sync.gear.style.left = `${Math.round(b.right + 4)}px`;
+    sync.gear.style.top = `${mid}px`;
+    const css = document.documentElement.style;
+    css.setProperty("--ivsync-x", `${Math.round(Math.max(8, Math.min(b.right - 236, window.innerWidth - 244)))}px`);
+    css.setProperty("--ivsync-y", `${mid + 20}px`);
   }
 
   function renderSync() {
@@ -1658,15 +1533,12 @@
     else if (b.dataset.act === "minus") nudgeSync(-sync.step);
     else if (b.dataset.act === "reset") nudgeSync(-sync.offset);
   });
-  // Close when clicking anywhere else.
-  window.addEventListener("pointerdown", (e) => {
-    if (sync.open && !sync.dlg.contains(e.target) && !sync.gear.contains(e.target)) closeSync();
-  }, true);
-  // Pointer over the lyrics side wakes the gear.
+  // Pointer near the lyric box wakes the gear.
   window.addEventListener("mousemove", (e) => {
     if (!document.body.classList.contains("ivlib-fs")) return;
-    const edge = window.innerWidth - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ivnext-w")) || window.innerWidth / 2);
-    document.body.classList.toggle("ivsync-hot", e.clientX > edge);
+    const b = $("ivlyr-box").getBoundingClientRect();
+    const near = e.clientX > b.left - 40 && e.clientX < b.right + 60 && e.clientY > b.top - 20 && e.clientY < b.bottom + 30;
+    document.body.classList.toggle("ivsync-hot", near);
   }, { passive: true });
   Spicetify.Player.addEventListener("songchange", () => { if (sync.open) openSync(); });
 
@@ -1686,6 +1558,72 @@
     return true;
   }
 
+  // ---------- lyric box: the current line above the player ----------
+  // Mirrors ivLyrics' active line (its own column stays hidden). Per song,
+  // decides once whether the lyrics are English: then only the original shows;
+  // otherwise a tiny original plus the translation.
+  const lyr = { el: $("ivlyr-box"), key: "", uri: null, english: null };
+  const LINE_SKIP = ".lyrics-lyricsContainer-LyricsLine-translation, .lyrics-lyricsContainer-LyricsLine-phonetic,"
+    + " .lyrics-lyricsContainer-LyricsLine-culturalNote, rt";
+  const flat = (t) => (t ?? "").replace(/\s+/g, " ").trim();
+  function lineText(line) {
+    const c = line.cloneNode(true);
+    c.querySelectorAll(LINE_SKIP).forEach((n) => n.remove());
+    return flat(c.textContent);
+  }
+  const EN_WORDS = /\b(the|you|i|i'm|me|my|and|to|in|it|is|of|on|your|we|be|so|not|love|no|all|just|that|what|never|can|don't|oh|this|with|for|like|know|it's|got|get|was|are|now|baby|yeah|when|she|he|they|our|up|down|out|go)\b/gi;
+  function looksEnglish(text) {
+    const letters = text.replace(/[^\p{L}]/gu, "");
+    if (!letters.length) return true;
+    const latin = letters.replace(/[^A-Za-z]/g, "").length / letters.length;
+    const words = text.split(/\s+/).filter(Boolean).length || 1;
+    return latin > 0.97 && (text.match(EN_WORDS) || []).length / words > 0.12;
+  }
+  function updateLyricBox() {
+    if (!document.body.classList.contains("ivlib-fs")) return;
+    const fs = document.querySelector(FS_SELECTOR);
+    const uri = Spicetify.Player.data?.item?.uri;
+    if (lyr.uri !== uri || lyr.english === null) {
+      const lines = [...(fs?.querySelectorAll(".lyrics-lyricsContainer-LyricsLine:not(.lyrics-lyricsContainer-LyricsLine-paddingLine)") ?? [])]
+        .slice(0, 60).map(lineText).filter(Boolean);
+      lyr.uri = uri;
+      lyr.english = lines.length ? looksEnglish(lines.join(" ")) : null;
+    }
+    const active = fs?.querySelector(".lyrics-lyricsContainer-LyricsLine-active:not(.lyrics-lyricsContainer-LyricsLine-paddingLine), .lyrics-lyricsContainer-LyricsLine-scrollCurrent");
+    const orig = active ? lineText(active) : "";
+    const tr = flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-translation")?.textContent);
+    const dual = !!tr && lyr.english !== true;
+    const key = `${orig}\u0000${dual ? tr : ""}`;
+    if (key === lyr.key) return;
+    lyr.key = key;
+    lyr.el.classList.toggle("dual", dual);
+    lyr.el.innerHTML = orig ? `<div class="o">${esc(orig)}</div>${dual ? `<div class="t">${esc(tr)}</div>` : ""}` : "";
+    lyr.el.classList.remove("in");
+    void lyr.el.offsetWidth; // restart the fade-in
+    lyr.el.classList.add("in");
+  }
+  setInterval(updateLyricBox, 250);
+
+  // ---------- pointer: one dispatcher ----------
+  // Closes menus on outside clicks, keeps the cover's right-press away from
+  // ivLyrics' hold-to-research, and moves focus to where you click. A click on
+  // empty space in the middle also folds the queue away.
+  const OWN_UI = "button, a, input, select, [role=button], [role=link], [role=slider], .fullscreen-progress-bar,"
+    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, #ivlib-tab";
+  window.addEventListener("pointerdown", (e) => {
+    if (ctx.state && !ctx.el.contains(e.target)) closeCtx();
+    if (sync.open && !sync.dlg.contains(e.target) && !sync.gear.contains(e.target)) closeSync();
+    if (e.button === 2 && onAlbumCover(e)) { e.stopImmediatePropagation(); return; }
+    if (e.button !== 0 || !document.body.classList.contains("ivlib-fs")) return;
+    if (e.target?.closest?.("#ivlib-panel, #ivlib-tab")) { setFocus("left"); return; }
+    if (e.target?.closest?.("#ivnext-panel")) { setFocus("right"); return; }
+    if (e.target?.closest?.(OWN_UI) || !e.target?.closest?.(FS_SELECTOR)) return;
+    if (isOpen("right")) setNext(false);
+    setFocus("mid");
+  }, true);
+
+  window.addEventListener("keydown", onKey, true);
+
   // ---------- launch API (used by playlist-home) ----------
   // Play a context, open ivLyrics fullscreen with the library panel, and come
   // back to `from` when fullscreen is exited.
@@ -1694,7 +1632,7 @@
     async launch(uri, from) {
       localStorage.setItem(STORE_OPEN, "1");
       try { await Spicetify.Player.playUri(uri); } catch (e) { console.error("[ivlyrics-sidecar] play failed", e); }
-      if (document.body.classList.contains("ivlib-fs")) { setOpen(true); return; }
+      if (document.body.classList.contains("ivlib-fs")) { focusZone("left"); return; }
       if (!Spicetify.Platform.History.location.pathname.startsWith("/ivLyrics")) Spicetify.Platform.History.push("/ivLyrics");
       for (let i = 0; i < 40; i++) {
         const lc = window.lyricContainer;
@@ -1727,6 +1665,7 @@
     if (fs) {
       document.body.appendChild(root);
       setOpen(localStorage.getItem(STORE_OPEN) === "1");
+      setFocus(state.open ? "left" : null);
       setTimeout(hideCornerChrome, 600);
       startBand(true);
     } else {
@@ -1734,7 +1673,6 @@
       closeSync();
       setFocus(null);
       startBand(false);
-      next.pinned = false;
       setNext(false);
       if (returnPath) { Spicetify.Platform.History.push(returnPath); returnPath = null; }
     }
@@ -1744,7 +1682,7 @@
   const queueFs = () => {
     if (fsQueued) return;
     fsQueued = true;
-    requestAnimationFrame(() => { fsQueued = false; syncFs(); });
+    requestAnimationFrame(() => { fsQueued = false; syncFs(); updateLyricBox(); });
   };
   new MutationObserver(queueFs).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"], childList: true });
   syncFs();
