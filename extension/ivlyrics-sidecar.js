@@ -16,7 +16,8 @@
 // back (closing the pane at the top). Clicks only select; double-click = Enter.
 // Mouse wheel over the player = volume in steps of 2 (100 at Spotify start).
 //
-// Library: playlists open in place, newest tracks first; q queues a track next;
+// Library: playlists open in place, newest tracks first; after a minute away
+// it reopens on the playing playlist; q queues a track next;
 // "back.." jumps to what's playing; search widens on Y / Enter / Tab from this
 // view to all playlists to Spotify. Queue: up next, plus album / artist views
 // from the title, album and artist links and the cover's right-click menu.
@@ -39,6 +40,7 @@
     items: [],
     sel: -1,          // selected (clicked) row in the library list
     focusNow: false,  // after "back..": scroll to the playing track
+    hiddenAt: 0,      // when the library was last closed or left with fullscreen
   };
 
   // ---------- styles ----------
@@ -859,11 +861,24 @@
   }
 
   function setOpen(open) {
+    const was = state.open;
     state.open = open;
     localStorage.setItem(STORE_OPEN, open ? "1" : "0");
     document.body.classList.toggle("ivlib-open", open);
-
+    if (!open && was) state.hiddenAt = Date.now();
+    if (open && !was && autoNow()) return;
     if (open && !state.items?.length) loadLibrary();
+  }
+
+  // Coming back to the library after more than a minute away (or for the
+  // first time) opens the playlist that's playing, instead of wherever you
+  // left off. Returns true when it did.
+  const AUTO_NOW_MS = 60000;
+  function autoNow() {
+    if (Date.now() - state.hiddenAt <= AUTO_NOW_MS || !playingListUri()) return false;
+    state.hiddenAt = Date.now();
+    goToNow();
+    return true;
   }
 
   // ---------- library pointer events ----------
@@ -1822,10 +1837,12 @@
     if (fs) {
       document.body.appendChild(root);
       setOpen(localStorage.getItem(STORE_OPEN) === "1");
+      if (state.open) autoNow(); // pane was already open when fullscreen was left
       setFocus(state.open ? "left" : null);
       setTimeout(hideCornerChrome, 600);
       startBand(true);
     } else {
+      if (state.open) state.hiddenAt = Date.now();
       closeCtx();
       closeSync();
       setFocus(null);
