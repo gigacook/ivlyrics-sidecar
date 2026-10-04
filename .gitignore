@@ -1,0 +1,8 @@
+# Personal working material: backups, raw settings with keys, Spicetify copy.
+local/
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.log
