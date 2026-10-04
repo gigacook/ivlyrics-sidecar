@@ -11,7 +11,7 @@ ivLyrics has a beautiful fullscreen mode, but you can't do much from it. To pick
 - **Ctrl+A: your library.** Playlists open in place, newest tracks first. Browsing never interrupts the song: a click selects, Enter goes in. Press **q** to play a track next, and **back..** returns to what's playing.
 - **Ctrl+E: what's up next.** The current song, your queue and autoplay picks.
 - **The player never gets covered.** Both panes stop short of the middle, and the current lyric line sits in a slim box above the player.
-- **Keyboard first.** ← opens the library, → the queue, ↑ leaves fullscreen. ↑ and ↓ move the selection, Enter goes one level in, Backspace one level back, Esc brings you back to just the player. Space plays or pauses anywhere.
+- **Keyboard first.** ← opens the library, → the queue (Ctrl+A and Ctrl+E snap straight to them). ↑ and ↓ move the selection, Enter goes one level in, Backspace one level back, Esc brings you back to just the player. Space plays or pauses anywhere.
 - **Scroll for volume.** The mouse wheel over the player changes the volume in steps of 2.
 - **Albums and artists in place.** Click the album, title or artist, or right-click the cover, and they open in the queue pane instead of throwing you out of fullscreen.
 - **Lyrics sync in two clicks.** A faint gear next to the lyric box nudges the lyrics earlier or later for the current song.
@@ -95,7 +95,7 @@ The installer refuses to run from an administrator window, because Spicetify fil
 
 **Start from your playlists.** Spotify opens on the Playlists page: your playlists and Liked Songs, grouped by folder, with a filter box at the top. Click one: it starts playing, ivLyrics goes fullscreen and the library pane is already open. When you leave fullscreen, you're back on the Playlists page. In windows 720 pixels tall or less, the page shows names only.
 
-**Get in and out.** Click the deck icon in Spotify's top bar (three bars, the middle one taller) to jump straight into ivLyrics fullscreen from any page. Leave with ↑ from the middle. ivLyrics' own fullscreen key (F12 by default) is switched off so it can't throw you out by accident; the ivLyrics menu in the bottom-right corner still has "Exit Fullscreen".
+**Get in and out.** Click the deck icon in Spotify's top bar (three bars, the middle one taller) to jump straight into ivLyrics fullscreen from any page. To leave, use the ivLyrics menu in the bottom-right corner and pick "Exit Fullscreen". Esc and ivLyrics' fullscreen key (F12 by default) are switched off for leaving, so you can't be thrown out by accident.
 
 **The layout.** In ivLyrics fullscreen, the player always sits in the middle of the window. The library pane and the queue pane are the same width (27.5% of the window, between 200 and 380 pixels) and share the same see-through dark background, so the player is never covered, even with both open. ivLyrics' own lyrics column is hidden. Instead, a slim box above the player shows only the line being sung:
 - For English songs, it shows just that line.
@@ -106,7 +106,7 @@ While lyrics are still loading, the lyric box shows a quiet `loading lrclib…` 
 **Moving around.** One part of the screen has the focus at a time: the library, the middle, or the queue.
 - **Arrow keys:** from the middle, ← opens and focuses the library, → opens and focuses the queue. Going back to the middle (→ from the library, ← from the queue) closes that pane again.
 - **Snap keys:** Ctrl+A opens the library and closes the queue; Ctrl+E opens the queue and closes the library. Either one puts the cursor on the top row of its list. If you're already in that pane, nothing moves, so your place in the list is kept.
-- **The arrow guide** between the lyric box and the player shows ← library, ↑ exit and → queue around a small dot. Click the dot to hide the guide (the dot turns hollow and dimmer) or show it again; your choice is remembered. While the middle has the focus, a ring blinks around the dot.
+- **The arrow guide** sits on one row well above the cover: `lib ◀ ● ▶ que`. Click the dot in the middle to hide the arrows (the dot turns hollow and dimmer) or show them again; your choice is remembered. While the middle has the focus, the dot blinks between white and violet.
 - **The focused pane** shows a soft glowing line along its inner edge.
 - **Steel grips** on the left and right edges show that the panes slide out; click one to open or close its pane. Faint labels in the corners name the sides (`◂ library`, `queue ▸` at the top) and their snap keys (`ctrl+a`, `ctrl+e` at the bottom) while the pane is closed.
 - **Clicks** move the focus to where you click. Clicking empty space in the middle closes the queue. Clicking buttons, the progress bar, the cover and links works as usual.
@@ -117,14 +117,14 @@ Inside either pane, the same keys always do the same thing:
 - **A click, or ↑ and ↓,** only selects. Nothing plays or opens.
 - **Enter, or a double-click,** goes one level in (a folder, playlist, album or release) or plays the selected track.
 - **Backspace** goes one level back. At the top level of a pane, it closes that pane.
-- **Esc**, anywhere, closes both panes, any dialog or menu, and the search, leaving just the player. Esc never exits fullscreen; ↑ from the middle does.
+- **Esc**, anywhere, closes both panes, any dialog or menu, and the search, leaving just the player. It never exits fullscreen.
 
 **Browse your library (Ctrl+A).** The first time you open the library, and whenever you open it after more than a minute away, it starts in the playlist that's playing, with the current track highlighted. Within a minute, it reopens exactly where you left it. While the library has the focus, the typing cursor stays in its search box, so you can type or use the arrow keys without clicking first. The top row shows where you are as a path, for example `/all/techno/dj`. Names too long for the pane are shortened in the middle, so both ends stay readable: `techno-hardgroove` can become `tech…oove`, and parent folders lose their vowels (`techno` becomes `tchn`) or fold into `…` before the current name is cut. Hover the path to see it in full.
 - A playlist or Liked Songs opens with each track on one line, "Artist – Song", and the date it was added, newest first.
 - To hear a track next without leaving your current playlist, hover it and click the yellow **q**, or select it and press Q while the search box is empty. It goes to the front of Spotify's queue, and the queue pane shows it with a yellow **u** in front.
 - Inside a playlist that isn't the one playing, a **back..** button sits at the top right. It opens the playing playlist and highlights the current track.
 - The top row also shows the keys as small glowing hints, which you can click too: `← ⌫` left of the path goes up one level, and `→ ent` on the right goes into the selected folder or playlist. At the top level the row shows just `/all`.
-- The selection is highlighted in violet; whatever is playing (playlist or track) is shown in neon yellow, here and in the queue pane.
+- The selection is highlighted in a dark, see-through violet; whatever is playing (playlist or track) is shown in neon yellow, here and in the queue pane.
 - Albums and artists saved in your library play when you press Enter on them.
 
 **Search.** Type in the box at the top of the library pane. Search starts in what you're looking at and only widens when you ask:
@@ -156,7 +156,7 @@ All of these work in ivLyrics fullscreen only, except Space, which works everywh
 | Esc | Anywhere | Closes both panes, dialogs, menus and the search. Just the player is left. |
 | Ctrl+A | Anywhere | Library pane open and focused, queue closed, cursor on the top row. Does nothing if you're already there. |
 | Ctrl+E | Anywhere | Queue pane open and focused, library closed, cursor on the top row. Does nothing if you're already there. |
-| ↑ | Middle | Leaves fullscreen. |
+| ↑ | Middle | Nothing. |
 | F12 | Anywhere | Nothing. ivLyrics' fullscreen key is switched off so it can't exit by accident. |
 | Mouse wheel | Over the player | Volume up or down by 2. |
 | ← | Middle | Focuses the library pane, opening it if needed. |

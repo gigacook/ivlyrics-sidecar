@@ -7,7 +7,7 @@
 // column is hidden; the current line shows in a box above the player.
 //
 // Keys (one dispatcher, onKey): Space play/pause anywhere; Esc back to just
-// the player; F12 is swallowed (↑ from the middle exits fullscreen instead);
+// the player; F12 is swallowed (leave via the ivLyrics menu);
 // Ctrl+A snaps to the library (queue closed), Ctrl+E to the queue (library
 // closed); already there = no change;
 // ← / → move focus between library, middle and queue: entering a side opens
@@ -105,12 +105,12 @@
       cursor: pointer; min-height: 36px;
     }
     /* Playing = neon signal yellow; selection = violet. */
-    :root { --ivplay: #eaff3d; --ivplay-glow: rgba(234,255,61,.45); --ivsel: rgba(160,90,255,.32); --ivsel-edge: #c08cff; }
+    :root { --ivplay: #eaff3d; --ivplay-glow: rgba(234,255,61,.45); --ivsel: rgba(80,45,128,.22); --ivsel-edge: rgba(150,100,220,.7); }
     .ivlib-row:hover { background: rgba(255,255,255,.08); }
-    .ivlib-row.active { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge), 0 0 12px rgba(160,90,255,.25); }
+    .ivlib-row.active { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge); }
     .ivlib-row.playing .ivlib-name { color: var(--ivplay); text-shadow: 0 0 8px var(--ivplay-glow); }
     /* Browsing: selected row, and a hover chip that queues the track next. */
-    #ivlib-list .ivlib-row.sel { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge), 0 0 12px rgba(160,90,255,.25); }
+    #ivlib-list .ivlib-row.sel { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge); }
     .ivlib-q {
       display: none; flex: none; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 4px;
       color: #ffd666; background: rgba(255,214,102,.14); cursor: pointer;
@@ -309,9 +309,9 @@
     #ivlib-panel::after { right: -1px; }
     #ivnext-panel::after { left: 0; }
     body.ivfocus-left #ivlib-panel::after, body.ivfocus-right #ivnext-panel::after { opacity: 1; }
-    #ivnext-list .ivlib-row.active { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge), 0 0 12px rgba(160,90,255,.25); opacity: 1; }
+    #ivnext-list .ivlib-row.active { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge); opacity: 1; }
     body:not(.ivfocus-left) #ivlib-list .ivlib-row.sel,
-    body:not(.ivfocus-right) #ivnext-list .ivlib-row.active { background: rgba(160,90,255,.1); box-shadow: inset 2px 0 0 rgba(192,140,255,.35); }
+    body:not(.ivfocus-right) #ivnext-list .ivlib-row.active { background: rgba(80,45,128,.1); box-shadow: inset 2px 0 0 rgba(150,100,220,.3); }
 
     /* Corner guides, all four the same size and contrast: names on top,
        snap keys at the bottom. Each pair hides while its pane is open. */
@@ -325,34 +325,34 @@
     #ivedge-r, #ivkey-r { right: 22px; }
     body.ivlib-open :is(#ivedge-l, #ivkey-l), body.ivnext-open :is(#ivedge-r, #ivkey-r) { opacity: 0; }
 
-    /* Arrow guide around a centre dot between the lyric box and the player.
-       The dot toggles the arrows (filled = shown, hollow = hidden) and is the
-       middle cursor: a ring blinks around it while the middle has the focus. */
+    /* Arrow guide: "lib ◀ ● ▶ que" on one symmetric row, well above the cover.
+       The dot toggles the guide (filled = shown, hollow = hidden) and is the
+       middle cursor: while the middle has the focus it blinks white / violet. */
     #ivhint {
-      position: fixed; z-index: 2147483641; left: 50vw; top: var(--ivhint-y, 22vh); width: 260px; height: 56px;
+      position: fixed; z-index: 2147483641; left: 50vw; top: var(--ivhint-y, 20vh); width: 240px; height: 20px;
       transform: translateX(-50%); pointer-events: none; display: none;
-      font: 700 10.5px var(--ivmono); letter-spacing: .05em; color: #dde1e6;
+      font: 700 10.5px var(--ivmono); letter-spacing: .05em; color: #e4e7eb;
     }
     body.ivlib-fs #ivhint { display: block; }
-    #ivhint span { position: absolute; display: flex; align-items: center; gap: 6px; opacity: .8; transition: opacity .2s ease;
-      text-shadow: 0 0 6px rgba(255,255,255,.5), 0 0 14px rgba(255,255,255,.2); }
-    #ivhint b { font-size: 17px; font-weight: 800; color: #f4f6f8; }
-    #ivhint .up { left: 50%; top: 0; transform: translateX(-50%); flex-direction: column; gap: 0; }
-    #ivhint .lf { right: calc(50% + 16px); top: 30px; }
-    #ivhint .rt { left: calc(50% + 16px); top: 35px; }
+    #ivhint span {
+      position: absolute; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px;
+      opacity: .8; transition: opacity .2s ease; text-shadow: 0 0 6px rgba(255,255,255,.45);
+    }
+    #ivhint .lf { right: calc(50% + 12px); }
+    #ivhint .rt { left: calc(50% + 12px); }
+    #ivhint svg { width: 15px; height: 11px; color: #f4f6f8; filter: drop-shadow(0 0 3px rgba(255,255,255,.55)); }
     body.ivhint-off #ivhint span { opacity: 0; }
     #ivhint-dot {
-      position: absolute; left: 50%; top: 40px; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; padding: 0;
+      position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; padding: 0;
       border-radius: 50%; border: 1.5px solid #fff; background: #fff; box-sizing: border-box;
-      cursor: pointer; pointer-events: auto; opacity: .85; box-shadow: 0 0 6px rgba(255,255,255,.5);
+      cursor: pointer; pointer-events: auto; box-shadow: 0 0 6px rgba(255,255,255,.55);
     }
     body.ivhint-off #ivhint-dot { background: transparent; opacity: .4; box-shadow: none; }
-    #ivhint-dot::after {
-      content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid #fff;
-      opacity: 0; box-shadow: 0 0 6px rgba(255,255,255,.5);
+    body.ivfocus-mid #ivhint-dot { animation: ivdot 1.06s steps(1, end) infinite; opacity: 1; }
+    @keyframes ivdot {
+      0% { background: #fff; border-color: #fff; box-shadow: 0 0 6px rgba(255,255,255,.6); }
+      50% { background: #a36bff; border-color: #a36bff; box-shadow: 0 0 8px rgba(163,107,255,.75); }
     }
-    body.ivfocus-mid #ivhint-dot::after { animation: ivring 1.06s steps(1, end) infinite; }
-    @keyframes ivring { 0% { opacity: .7; } 50% { opacity: 0; } }
 
     /* Feedback line at the top of the queue pane: small, selectable. */
     #ivnext-feedback {
@@ -397,7 +397,7 @@
     <div class="ivedge" id="ivedge-r">queue ▸</div>
     <div class="ivedge" id="ivkey-l">ctrl+a</div>
     <div class="ivedge" id="ivkey-r">ctrl+e</div>
-    <div id="ivhint"><span class="up"><b>↑</b>exit</span><span class="lf">library <b>←</b></span><button id="ivhint-dot" title="Show / hide the arrow guide"></button><span class="rt"><b>→</b> queue</span></div>
+    <div id="ivhint"><span class="lf">lib <svg viewBox="0 0 16 12"><path d="M0 6 7 0v3.6h9v4.8H7V12z" fill="currentColor"/></svg></span><button id="ivhint-dot" title="Show / hide the arrow guide"></button><span class="rt"><svg viewBox="0 0 16 12"><path d="M16 6 9 0v3.6H0v4.8h9V12z" fill="currentColor"/></svg> que</span></div>
     <div id="ivvol"></div>
     <div id="ivnext-divider"><div class="zip"></div><svg class="cog" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.3"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="white" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></div>
     <div id="ivlib-ctx" hidden></div>
@@ -1235,10 +1235,10 @@
     css.setProperty("--ivnext-top", `${Math.max(8, Math.round(top))}px`);
     css.setProperty("--ivnext-bottom", `${Math.max(8, Math.round(H - bottom))}px`);
     css.setProperty("--ivlyr-w", `${Math.max(160, Math.min(440, W - 2 * pw - 48))}px`);
-    // Arrow guide (56px tall, dot 40px down) sits just above the player; the
-    // lyric box ends above the guide.
-    css.setProperty("--ivhint-y", `${Math.round(playerTop - 62)}px`);
-    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 68)}px`);
+    // Arrow guide row (20px) centred ~85px above the cover; the lyric box
+    // ends just above the guide.
+    css.setProperty("--ivhint-y", `${Math.round(playerTop - 95)}px`);
+    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 103)}px`);
     placeGear();
   }
 
@@ -1317,6 +1317,7 @@
     // 4. Snap: Ctrl+A library only, Ctrl+E queue only.
     if (e.ctrlKey && !e.altKey && !e.metaKey && (e.code === "KeyA" || e.code === "KeyE")) {
       consume();
+      snapKeyAt = Date.now();
       snapTo(e.code === "KeyA" ? "left" : "right");
       return;
     }
@@ -1327,13 +1328,35 @@
     if (zone === "right") return queueKey(e, consume);
     if (e.key === "ArrowLeft") { consume(); focusZone("left"); }
     else if (e.key === "ArrowRight") { consume(); focusZone("right"); }
-    else if (e.key === "ArrowUp") { consume(); exitFullscreen(); }
   }
 
-  function exitFullscreen() {
-    const lc = window.lyricContainer;
-    if (lc?.state?.isFullscreen && typeof lc.toggleFullscreen === "function") lc.toggleFullscreen();
-  }
+  // Spotify binds Ctrl+A to its own "select all" and can swallow the keydown
+  // before us (Ctrl+E has no such binding). Fallbacks: the key's release, and
+  // the page-wide select-all it triggers. snapKeyAt stops double snaps.
+  let snapKeyAt = 0, ctrlHeld = false, pointerHeld = false;
+  window.addEventListener("keydown", (e) => { if (e.key === "Control") ctrlHeld = true; }, true);
+  window.addEventListener("pointerdown", () => { pointerHeld = true; }, true);
+  window.addEventListener("pointerup", () => { pointerHeld = false; }, true);
+  window.addEventListener("blur", () => { ctrlHeld = false; pointerHeld = false; });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "Control") { ctrlHeld = false; return; }
+    if (!document.body.classList.contains("ivlib-fs") || e.altKey || e.metaKey) return;
+    if ((e.code !== "KeyA" && e.code !== "KeyE") || !(e.ctrlKey || ctrlHeld)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (Date.now() - snapKeyAt < 600) return;
+    snapKeyAt = Date.now();
+    snapTo(e.code === "KeyA" ? "left" : "right");
+  }, true);
+  document.addEventListener("selectstart", (e) => {
+    if (!document.body.classList.contains("ivlib-fs") || pointerHeld || !ctrlHeld) return;
+    const el = e.target?.nodeType === 3 ? e.target.parentElement : e.target;
+    if (el?.closest?.("input, textarea, [contenteditable='true']")) return;
+    e.preventDefault();
+    if (Date.now() - snapKeyAt < 600) return;
+    snapKeyAt = Date.now();
+    snapTo("left");
+  }, true);
 
   // Snap to one side: that pane open and focused, the other closed. Already
   // there = nothing moves. A fresh snap puts the cursor on the top row.
