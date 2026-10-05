@@ -126,7 +126,7 @@
   "ivLyrics:visual:cultural-annotations-vinyl-opacity": "60",
   "ivLyrics:visual:translate:translated-lyrics-source": "auto",
   "ivLyrics:visual:translate:display-mode": "below",
-  "ivLyrics:visual:translate:target-language": "sv",
+  "ivLyrics:visual:translate:target-language": "en",
   "ivLyrics:visual:translate:pronunciation-notation": "latin",
   "ivLyrics:visual:cultural-annotations-enabled": "true",
   "ivLyrics:visual:translate:detect-language-override": "off",

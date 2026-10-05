@@ -6,7 +6,8 @@
 // of the window so the centred player is never covered. ivLyrics' lyrics
 // column is hidden; the current line shows in a box above the player.
 //
-// Keys (one dispatcher, onKey): Space play/pause anywhere; Esc back to just
+// Keys (one dispatcher, onKey): Space play/pause and J / K 10 s back / forward
+// anywhere (not mid-text in a text box); Esc back to just
 // the player; F12 is swallowed; Ctrl+Backspace leaves fullscreen (also the
 // "ctrl+⌫ exit" label at the bottom middle);
 // Ctrl+A snaps to the library (queue closed), Ctrl+E to the queue (library
@@ -84,6 +85,8 @@
       font-family: var(--ivmono); color: #fff;
     }
     body.ivlib-open #ivlib-panel { transform: none; }
+    /* Ctrl+A / Ctrl+E snap: panes and grips jump almost instantly. */
+    body.ivsnap :is(#ivlib-panel, #ivnext-panel, .ivgrip, .ivedge) { transition-duration: .04s !important; }
     .ivlib-head { display: flex; align-items: center; gap: 6px; padding: 0 4px; }
     .ivlib-head[hidden] { display: none; }
     .ivlib-title { font-size: 13px; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1329,6 +1332,12 @@
       if (!e.repeat) Spicetify.Player.togglePlay();
       return;
     }
+    // 1b. J / K: 10 s back / forward anywhere, with the same text-box exception.
+    if ((e.code === "KeyJ" || e.code === "KeyK") && !mod && !(field && (field.value ?? field.textContent ?? "").length)) {
+      consume();
+      seekBy(e.code === "KeyJ" ? -10000 : 10000);
+      return;
+    }
     if (!fs) return;
     // F12 (or whatever ivLyrics' fullscreen key is) never leaves; Ctrl+Backspace does.
     const fsKey = (localStorage.getItem("ivLyrics:visual:fullscreen-key") || "f12").toLowerCase();
@@ -1397,7 +1406,11 @@
 
   // Snap to one side: that pane open and focused, the other closed. Already
   // there = nothing moves. A fresh snap puts the cursor on the top row.
+  let snapTimer = null;
   function snapTo(zone) {
+    document.body.classList.add("ivsnap");
+    clearTimeout(snapTimer);
+    snapTimer = setTimeout(() => document.body.classList.remove("ivsnap"), 120);
     if (zone === "left" && isOpen("right")) setNext(false);
     if (zone === "right" && state.open) setOpen(false);
     if (focus.zone === zone && isOpen(zone)) return;
@@ -1833,14 +1846,23 @@
   // volume in steps of 2, snapped to even numbers: one wheel notch (100) is
   // five steps, 10 points. Trackpads accumulate.
   const vol = { acc: 0, timer: null, el: $("ivvol") };
+  function flashReadout(text) {
+    vol.el.textContent = text;
+    vol.el.classList.add("on");
+    clearTimeout(vol.timer);
+    vol.timer = setTimeout(() => vol.el.classList.remove("on"), 700);
+  }
+  function seekBy(ms) {
+    try {
+      if (ms < 0) Spicetify.Player.skipBack(-ms); else Spicetify.Player.skipForward(ms);
+      flashReadout(ms < 0 ? `◀ ${-ms / 1000}s` : `${ms / 1000}s ▶`);
+    } catch (e) { console.warn("[ivlyrics-sidecar] seek failed", e); }
+  }
   function stepVolume(d) {
     const cur = Math.round(((Spicetify.Player.getVolume?.() ?? 1) * 100) / 2) * 2;
     const v = Math.max(0, Math.min(100, cur + d));
     Spicetify.Player.setVolume(v / 100);
-    vol.el.textContent = `vol ${v}`;
-    vol.el.classList.add("on");
-    clearTimeout(vol.timer);
-    vol.timer = setTimeout(() => vol.el.classList.remove("on"), 700);
+    flashReadout(`vol ${v}`);
   }
   window.addEventListener("wheel", (e) => {
     if (!document.body.classList.contains("ivlib-fs")) return;
