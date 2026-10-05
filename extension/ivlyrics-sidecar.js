@@ -6,7 +6,7 @@
 // of the window so the centred player is never covered. ivLyrics' lyrics
 // column is hidden; the current line shows in a box above the player.
 //
-// Keys (one dispatcher, onKey): Space play/pause and J / K 10 s back / forward
+// Keys (one dispatcher, onKey): Space play/pause and , / . 10 s back / forward
 // anywhere (not mid-text in a text box); Esc back to just
 // the player; F12 is swallowed; Ctrl+Backspace leaves fullscreen (also the
 // "ctrl+⌫ exit" label at the bottom middle);
@@ -1332,10 +1332,10 @@
       if (!e.repeat) Spicetify.Player.togglePlay();
       return;
     }
-    // 1b. J / K: 10 s back / forward anywhere, with the same text-box exception.
-    if ((e.code === "KeyJ" || e.code === "KeyK") && !mod && !(field && (field.value ?? field.textContent ?? "").length)) {
+    // 1b. , and . : 10 s back / forward anywhere, with the same text-box exception.
+    if ((e.key === "," || e.key === ".") && !mod && !(field && (field.value ?? field.textContent ?? "").length)) {
       consume();
-      seekBy(e.code === "KeyJ" ? -10000 : 10000);
+      seekBy(e.key === "," ? -10000 : 10000);
       return;
     }
     if (!fs) return;
@@ -1376,10 +1376,21 @@
     else if (e.key === "ArrowRight") { consume(); focusZone("right"); }
   }
 
-  // Spotify binds Ctrl+A to its own "select all" and can swallow the keydown
-  // before us (Ctrl+E has no such binding). Fallbacks: the key's release, and
-  // the page-wide select-all it triggers. snapKeyAt stops double snaps.
+  // Spotify's desktop shell owns Ctrl+A ("select all"): the page never sees
+  // the keydown, only a "select_all" control message, sent at once. That
+  // message is the snap; the key's release and the page-wide select-all it
+  // can trigger are fallbacks. snapKeyAt stops double snaps.
   let snapKeyAt = 0, ctrlHeld = false, pointerHeld = false;
+  try {
+    Spicetify.Platform.ControlMessageAPI.getEvents().addListener("message", ({ data } = {}) => {
+      if (data?.type !== "select_all" || !document.body.classList.contains("ivlib-fs")) return;
+      const el = document.activeElement;
+      if (el?.matches?.("input, textarea, [contenteditable='true']") && (el.value ?? el.textContent ?? "").length) return;
+      if (Date.now() - snapKeyAt < 600) return;
+      snapKeyAt = Date.now();
+      snapTo("left");
+    });
+  } catch (e) { console.warn("[ivlyrics-sidecar] select_all hook unavailable, Ctrl+A snaps on release", e); }
   window.addEventListener("keydown", (e) => { if (e.key === "Control") ctrlHeld = true; }, true);
   window.addEventListener("pointerdown", () => { pointerHeld = true; }, true);
   window.addEventListener("pointerup", () => { pointerHeld = false; }, true);

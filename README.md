@@ -14,7 +14,7 @@ ivLyrics has the best-looking fullscreen in Spotify, but it's a dead end: to pic
 - **Search that widens when you ask.** It starts in the playlist you're looking at, then one key widens it to all your playlists, and one more to all of Spotify.
 - **Just the line being sung.** A slim box above the cover shows the current lyric line. For songs in other languages, a tiny original sits over the translation.
 - **Out-of-sync lyrics fixed in two clicks.** A faint gear by the lyric box moves this song's lyrics earlier or later.
-- **Built for the keyboard.** The arrow keys move between library, player and queue. Space plays and pauses, J and K jump 10 seconds back and forward, Esc clears the screen down to the player, and Ctrl+Backspace leaves fullscreen.
+- **Built for the keyboard.** The arrow keys move between library, player and queue. Space plays and pauses, comma and period jump 10 seconds back and forward, Esc clears the screen down to the player, and Ctrl+Backspace leaves fullscreen.
 - **Scroll for volume.** The mouse wheel over the player changes the volume by 10 per notch.
 - **One click in.** A deck icon in Spotify's top bar opens the fullscreen from any page, and Spotify starts on your playlists: pick one and you're in.
 
@@ -153,13 +153,13 @@ Tab widens the search at any time, even when there are matches.
 
 ### Keys
 
-All of these work in ivLyrics fullscreen only, except Space, J and K, which work everywhere in Spotify. J and K seek whenever the search box is empty, so a search can't start with either letter (the same goes for Q while a track is selected). Start with another part of the name instead: `ohnny` finds Johnny.
+All of these work in ivLyrics fullscreen only, except Space, comma and period, which work everywhere in Spotify. Q queues the selected track whenever the search box is empty, so while a track is selected, a search can't start with Q: start with another part of the name instead (`ueen` finds Queen).
 
 | Press | Where it works | What happens |
 |---|---|---|
 | Space | Anywhere in Spotify | Plays or pauses. The only exception is a text box that already has text in it, where Space types a space so multi-word searches still work. |
-| J | Anywhere in Spotify | Jumps 10 seconds back. A small `◀ 10s` shows at the bottom in fullscreen. Same text-box exception as Space. |
-| K | Anywhere in Spotify | Jumps 10 seconds forward (`10s ▶`). Same text-box exception as Space. |
+| , (comma) | Anywhere in Spotify | Jumps 10 seconds back. A small `◀ 10s` shows at the bottom in fullscreen. Same text-box exception as Space. |
+| . (period) | Anywhere in Spotify | Jumps 10 seconds forward (`10s ▶`). Same text-box exception as Space. |
 | Esc | Anywhere | Closes both panes, dialogs, menus and the search. Just the player is left. |
 | Ctrl+Backspace | Anywhere, except a text box with text in it | Leaves fullscreen. Same as clicking `ctrl+⌫ exit` at the bottom middle. In a text box with text, it deletes the last word. |
 | Ctrl+A | Anywhere | Library pane open and focused, queue closed, cursor on the top row. Does nothing if you're already there. |
