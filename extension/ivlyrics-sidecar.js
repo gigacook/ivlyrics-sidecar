@@ -1310,7 +1310,7 @@
       return;
     }
     if (!fs) return;
-    // F12 (or whatever ivLyrics' fullscreen key is) no longer leaves; ↑ from the middle does.
+    // F12 (or whatever ivLyrics' fullscreen key is) never leaves; Ctrl+Backspace does.
     const fsKey = (localStorage.getItem("ivLyrics:visual:fullscreen-key") || "f12").toLowerCase();
     if (e.key === "F12" || (!field && (e.key ?? "").toLowerCase() === fsKey)) { consume(); return; }
     // 2. Esc: everything closed, just the player.
