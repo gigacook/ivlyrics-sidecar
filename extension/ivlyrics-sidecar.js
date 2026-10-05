@@ -8,14 +8,15 @@
 //
 // Keys (one dispatcher, onKey): Space play/pause anywhere; Esc back to just
 // the player; F12 is swallowed; Ctrl+Backspace leaves fullscreen (also the
-// "ctrl+⌫ exit" label at the top middle);
+// "ctrl+⌫ exit" label at the bottom middle);
 // Ctrl+A snaps to the library (queue closed), Ctrl+E to the queue (library
 // closed); already there = no change;
 // ← / → move focus between library, middle and queue: entering a side opens
 // it, leaving it back to the middle closes it; ↑ / ↓ move the selection in
 // the focused pane; Enter goes one level in or plays; Backspace goes one level
 // back (closing the pane at the top). Clicks only select; double-click = Enter.
-// Mouse wheel over the player = volume in steps of 2 (100 at Spotify start).
+// C in the queue pane clears what you queued yourself.
+// Mouse wheel over the player = volume, 10 per notch in steps of 2 (100 at Spotify start).
 //
 // Library: playlists open in place, newest tracks first; after a minute away
 // it reopens on the playing playlist; q queues a track next;
@@ -237,7 +238,7 @@
     .ivlib-num { flex: none; width: 18px; text-align: right; font-size: 11px; opacity: .45; font-variant-numeric: tabular-nums; }
     /* Sync gear: right of the lyric box, invisible until the pointer is near it. */
     #ivsync-gear {
-      position: fixed; z-index: 2147483646; width: 26px; height: 26px; padding: 4px; margin: -13px 0 0 0;
+      position: fixed; z-index: 2147483646; width: 18px; height: 18px; padding: 3px; margin: -9px 0 0 0;
       border: 0; border-radius: 50%; background: transparent; color: #fff; cursor: pointer;
       opacity: 0; pointer-events: none; transition: opacity .25s ease, background .15s;
     }
@@ -287,7 +288,7 @@
        packed with no gap. */
     #ivlyr-box {
       position: fixed; z-index: 2147483640; left: 50vw; transform: translateX(-50%);
-      width: var(--ivlyr-w, 40vw); top: 3vh; bottom: var(--ivlyr-bottom, 70vh);
+      width: var(--ivlyr-w, 40vw); top: 40px; bottom: var(--ivlyr-bottom, 70vh);
       display: none; flex-direction: column; justify-content: center; align-items: center;
       text-align: center; overflow: hidden; pointer-events: none; color: #fff; font-family: var(--ivmono);
       text-shadow: 0 0 2px rgba(0,0,0,.8), 0 0 12px rgba(0,0,0,.55);
@@ -320,8 +321,9 @@
       position: fixed; z-index: 2147483639; font: 600 10.5px var(--ivmono); letter-spacing: .06em;
       color: #fff; opacity: .28; pointer-events: none; transition: opacity .2s ease;
     }
-    #ivedge-l, #ivedge-r, #ivexit { top: 14px; }
-    /* Top middle, between the library and queue labels: leaves fullscreen. */
+    #ivedge-l, #ivedge-r { top: 14px; }
+    #ivexit { bottom: 14px; }
+    /* Bottom middle, between the ctrl+a and ctrl+e labels: leaves fullscreen. */
     #ivexit { left: 50vw; transform: translateX(-50%); pointer-events: auto; cursor: pointer; -webkit-app-region: no-drag; }
     #ivexit:hover { opacity: .8; }
     #ivkey-l, #ivkey-r { bottom: 14px; }
@@ -329,27 +331,28 @@
     #ivedge-r, #ivkey-r { right: 22px; }
     body.ivlib-open :is(#ivedge-l, #ivkey-l), body.ivnext-open :is(#ivedge-r, #ivkey-r) { opacity: 0; }
 
-    /* Arrow guide: "lib ◀ ● ▶ que" on one symmetric row, well above the cover.
+    /* Arrow guide: "lib ◀ ● ▶ que" on one symmetric row at the top middle,
+       between the library and queue corner labels, in yellow to stand apart.
        The dot toggles the guide (filled = shown, hollow = hidden) and is the
        middle cursor: while the middle has the focus it blinks white / violet. */
     #ivhint {
-      position: fixed; z-index: 2147483641; left: 50vw; top: var(--ivhint-y, 20vh); width: 240px; height: 20px;
+      position: fixed; z-index: 2147483641; left: 50vw; top: 11px; width: 240px; height: 20px;
       transform: translateX(-50%); pointer-events: none; display: none;
-      font: 700 10.5px var(--ivmono); letter-spacing: .05em; color: #e4e7eb;
+      font: 700 10.5px var(--ivmono); letter-spacing: .05em; color: #ffd666;
     }
     body.ivlib-fs #ivhint { display: block; }
     #ivhint span {
       position: absolute; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px;
-      opacity: .8; transition: opacity .2s ease; text-shadow: 0 0 6px rgba(255,255,255,.45);
+      opacity: .85; transition: opacity .2s ease; text-shadow: 0 0 6px rgba(255,214,102,.45);
     }
     #ivhint .lf { right: calc(50% + 12px); }
     #ivhint .rt { left: calc(50% + 12px); }
-    #ivhint svg { width: 15px; height: 11px; color: #f4f6f8; filter: drop-shadow(0 0 3px rgba(255,255,255,.55)); }
+    #ivhint svg { width: 15px; height: 11px; color: #ffd666; filter: drop-shadow(0 0 3px rgba(255,214,102,.55)); }
     body.ivhint-off #ivhint span { opacity: 0; }
     #ivhint-dot {
       position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; padding: 0;
       border-radius: 50%; border: 1.5px solid #fff; background: #fff; box-sizing: border-box;
-      cursor: pointer; pointer-events: auto; box-shadow: 0 0 6px rgba(255,255,255,.55);
+      cursor: pointer; pointer-events: auto; box-shadow: 0 0 6px rgba(255,255,255,.55); -webkit-app-region: no-drag;
     }
     body.ivhint-off #ivhint-dot { background: transparent; opacity: .4; box-shadow: none; }
     body.ivfocus-mid #ivhint-dot { animation: ivdot 1.06s steps(1, end) infinite; opacity: 1; }
@@ -373,6 +376,7 @@
       text-shadow: 0 0 6px rgba(255,255,255,.4); transition: opacity .35s ease;
     }
     #ivvol.on { opacity: .75; transition: opacity .05s linear; }
+    #ivlib-root:has(#ivvol.on) #ivexit { opacity: 0; } /* same spot: the readout wins */
 
     /* ivLyrics' loading pill moves into the lyric box. */
     body.ivlib-fs .lyrics-generation-status-stack { display: none !important; }
@@ -726,6 +730,24 @@
     } catch (e) {
       console.warn("[ivlyrics-sidecar] queue next failed", e);
       Spicetify.showNotification?.(`Couldn't queue ${v.name}`, true);
+    }
+  }
+
+  // Empty the "Queue" section (tracks you queued yourself). The playlist's own
+  // upcoming tracks and autoplay stay, like Spotify's "Clear queue".
+  async function clearQueue() {
+    const P = Spicetify.Platform.PlayerAPI;
+    let queued = null;
+    try { queued = P?.getQueue?.()?.queued; } catch {}
+    if (Array.isArray(queued) && !queued.length) { Spicetify.showNotification?.("Nothing queued"); return; }
+    try {
+      await P.clearQueue();
+      list.querySelectorAll(".ivlib-row.queued").forEach((r) => r.classList.remove("queued"));
+      Spicetify.showNotification?.("Queue cleared");
+      if (document.body.classList.contains("ivnext-open")) setTimeout(renderNext, 300);
+    } catch (e) {
+      console.warn("[ivlyrics-sidecar] clear queue failed", e);
+      Spicetify.showNotification?.("Couldn't clear the queue", true);
     }
   }
 
@@ -1134,7 +1156,7 @@
 
   function renderNext() {
     crumb.textContent = "/" + ["queue", ...next.stack.map((n) => n.name ?? "…")].join("/");
-    hint.textContent = next.stack.length ? "⌫ back · esc player" : "⌫ close · esc player";
+    hint.textContent = next.stack.length ? "⌫ back · esc player" : "⌫ close · c clear · esc player";
     if (next.view) { renderNest(); markActive(); return; }
     next.rendered = null;
     const { cur, nxt } = queueSnapshot();
@@ -1246,10 +1268,8 @@
     css.setProperty("--ivnext-top", `${Math.max(8, Math.round(top))}px`);
     css.setProperty("--ivnext-bottom", `${Math.max(8, Math.round(H - bottom))}px`);
     css.setProperty("--ivlyr-w", `${Math.max(160, Math.min(440, W - 2 * pw - 48))}px`);
-    // Arrow guide row (20px) centred ~85px above the cover; the lyric box
-    // ends just above the guide.
-    css.setProperty("--ivhint-y", `${Math.round(playerTop - 95)}px`);
-    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 103)}px`);
+    // The lyric box runs from under the arrow guide (top row) to just above the cover.
+    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 24)}px`);
     placeGear();
   }
 
@@ -1448,6 +1468,7 @@
     if (k === "ArrowLeft") { consume(); setNext(false); setFocus("mid"); return; }
     if (k === "ArrowDown" || k === "ArrowUp") { consume(); moveActive(k === "ArrowDown" ? 1 : -1); return; }
     if (k === "Enter") { consume(); if (getActive() >= 0) activateNext(next.views[getActive()]); return; }
+    if (k === "c" || k === "C") { consume(); clearQueue(); return; }
     if (k === "Backspace") {
       consume();
       if (next.stack.length) popNest();
@@ -1644,7 +1665,7 @@
     sync.gear.style.top = `${mid}px`;
     const css = document.documentElement.style;
     css.setProperty("--ivsync-x", `${Math.round(Math.max(8, Math.min(b.right - 236, window.innerWidth - 244)))}px`);
-    css.setProperty("--ivsync-y", `${mid + 20}px`);
+    css.setProperty("--ivsync-y", `${mid + 14}px`);
   }
 
   function renderSync() {
@@ -1809,7 +1830,8 @@
 
   // ---------- volume ----------
   // Wheel anywhere over the fullscreen except the panes (they scroll) changes
-  // volume in steps of 2, snapped to even numbers. Trackpads accumulate.
+  // volume in steps of 2, snapped to even numbers: one wheel notch (100) is
+  // five steps, 10 points. Trackpads accumulate.
   const vol = { acc: 0, timer: null, el: $("ivvol") };
   function stepVolume(d) {
     const cur = Math.round(((Spicetify.Player.getVolume?.() ?? 1) * 100) / 2) * 2;
@@ -1826,9 +1848,9 @@
     e.preventDefault();
     e.stopImmediatePropagation(); // also keeps ivLyrics' wheel font-size change away
     vol.acc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
-    while (Math.abs(vol.acc) >= 100) {
+    while (Math.abs(vol.acc) >= 20) {
       stepVolume(vol.acc < 0 ? 2 : -2);
-      vol.acc -= Math.sign(vol.acc) * 100;
+      vol.acc -= Math.sign(vol.acc) * 20;
     }
     if (Math.abs(e.deltaY) >= 100) vol.acc = 0;
   }, { capture: true, passive: false });

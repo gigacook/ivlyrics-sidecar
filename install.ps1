@@ -46,7 +46,7 @@ foreach ($src in $files.Keys) {
   Say "copied $src"
 }
 
-# Earlier builds were called ivlyrics-library.js; swap it out if present.
+# Pre-release builds were called ivlyrics-library.js; swap it out if present.
 $old = Join-Path $extDir "ivlyrics-library.js"
 if (Test-Path $old) {
   spicetify config extensions ivlyrics-library.js- 2>$null | Out-Null
@@ -60,4 +60,4 @@ Say "registered extension + playlist-home app"
 
 Say "running spicetify apply (Spotify will restart)..." Cyan
 spicetify apply
-Write-Host "`nDone. Open ivLyrics fullscreen and press Alt+L / Alt+R.`n" -ForegroundColor Green
+Write-Host "`nDone. Click the deck icon in Spotifys top bar, then press Left or Right.`n" -ForegroundColor Green

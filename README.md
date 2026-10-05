@@ -11,8 +11,8 @@ ivLyrics has a beautiful fullscreen mode, but you can't do much from it. To pick
 - **Ctrl+A: your library.** Playlists open in place, newest tracks first. Browsing never interrupts the song: a click selects, Enter goes in. Press **q** to play a track next, and **back..** returns to what's playing.
 - **Ctrl+E: what's up next.** The current song, your queue and autoplay picks.
 - **The player never gets covered.** Both panes stop short of the middle, and the current lyric line sits in a slim box above the player.
-- **Keyboard first.** ← opens the library, → the queue (Ctrl+A and Ctrl+E snap straight to them). ↑ and ↓ move the selection, Enter goes one level in, Backspace one level back, Esc brings you back to just the player, and Ctrl+Backspace leaves fullscreen. Space plays or pauses anywhere.
-- **Scroll for volume.** The mouse wheel over the player changes the volume in steps of 2.
+- **Keyboard first.** ← opens the library, → the queue (Ctrl+A and Ctrl+E snap straight to them). ↑ and ↓ move the selection, Enter goes one level in, Backspace one level back, Esc brings you back to just the player, C in the queue clears it, and Ctrl+Backspace leaves fullscreen. Space plays or pauses anywhere.
+- **Scroll for volume.** The mouse wheel over the player changes the volume by 10 per notch.
 - **Albums and artists in place.** Click the album, title or artist, or right-click the cover, and they open in the queue pane instead of throwing you out of fullscreen.
 - **Lyrics sync in two clicks.** A faint gear next to the lyric box nudges the lyrics earlier or later for the current song.
 - **One click in.** A deck icon in Spotify's top bar opens ivLyrics fullscreen from anywhere, and Spotify opens on your playlists; picking one drops you straight in.
@@ -95,9 +95,9 @@ The installer refuses to run from an administrator window, because Spicetify fil
 
 **Start from your playlists.** Spotify opens on the Playlists page: your playlists and Liked Songs, grouped by folder, with a filter box at the top. Click one: it starts playing, ivLyrics goes fullscreen and the library pane is already open. When you leave fullscreen, you're back on the Playlists page. In windows 720 pixels tall or less, the page shows names only.
 
-**Get in and out.** Click the deck icon in Spotify's top bar (three bars, the middle one taller) to jump straight into ivLyrics fullscreen from any page. To leave, press **Ctrl+Backspace**, or click the faint `ctrl+⌫ exit` label at the top middle of the screen, between the `◂ library` and `queue ▸` labels. "Exit Fullscreen" in the ivLyrics menu (bottom-right corner) does the same. While the library's search box has text in it, Ctrl+Backspace deletes the last word instead, as it does in any text box; clear the box first, or press Esc. Esc and ivLyrics' fullscreen key (F12 by default) never leave fullscreen, so a stray key press can't throw you out.
+**Get in and out.** Click the deck icon in Spotify's top bar (three bars, the middle one taller) to jump straight into ivLyrics fullscreen from any page. To leave, press **Ctrl+Backspace**, or click the faint `ctrl+⌫ exit` label at the bottom middle of the screen, between the `ctrl+a` and `ctrl+e` labels. "Exit Fullscreen" in the ivLyrics menu (bottom-right corner) does the same. While the library's search box has text in it, Ctrl+Backspace deletes the last word instead, as it does in any text box; clear the box first, or press Esc. Esc and ivLyrics' fullscreen key (F12 by default) never leave fullscreen, so a stray key press can't throw you out.
 
-**The layout.** In ivLyrics fullscreen, the player always sits in the middle of the window. The library pane and the queue pane are the same width (27.5% of the window, between 200 and 380 pixels) and share the same see-through dark background, so the player is never covered, even with both open. ivLyrics' own lyrics column is hidden. Instead, a slim box above the player shows only the line being sung:
+**The layout.** In ivLyrics fullscreen, the player always sits in the middle of the window. The library pane and the queue pane are the same width (27.5% of the window, between 200 and 380 pixels) and share the same see-through dark background, so the player is never covered, even with both open. ivLyrics' own lyrics column is hidden. Instead, a slim box between the arrow guide at the top and the cover shows only the line being sung:
 - For English songs, it shows just that line, at 17 pixels.
 - For songs in other languages, it shows the original line very small (9 pixels) with the translation right under it (12 pixels), packed tight with no gap. The translation comes from ivLyrics, so it only appears if translation is turned on there.
 
@@ -108,12 +108,12 @@ While lyrics are still loading, the lyric box shows a quiet `loading lrclib…` 
 **Moving around.** One part of the screen has the focus at a time: the library, the middle, or the queue.
 - **Arrow keys:** from the middle, ← opens and focuses the library, → opens and focuses the queue. Going back to the middle (→ from the library, ← from the queue) closes that pane again.
 - **Snap keys:** Ctrl+A opens the library and closes the queue; Ctrl+E opens the queue and closes the library. Either one puts the cursor on the top row of its list. If you're already in that pane, nothing moves, so your place in the list is kept.
-- **The arrow guide** sits on one row well above the cover: `lib ◀ ● ▶ que`. Click the dot in the middle to hide the arrows (the dot turns hollow and dimmer) or show them again; your choice is remembered. While the middle has the focus, the dot blinks between white and violet.
+- **The arrow guide** sits in yellow at the top middle of the screen, between the `◂ library` and `queue ▸` labels: `lib ◀ ● ▶ que`. The yellow sets it apart from the white lyrics just below it. Click the dot in the middle to hide the arrows (the dot turns hollow and dimmer) or show them again; your choice is remembered. While the middle has the focus, the dot blinks between white and violet.
 - **The focused pane** shows a soft glowing line along its inner edge.
-- **Steel grips** on the left and right edges show that the panes slide out; click one to open or close its pane. Faint labels in the corners name the sides (`◂ library`, `queue ▸` at the top) and their snap keys (`ctrl+a`, `ctrl+e` at the bottom) while the pane is closed. Between the two top labels, `ctrl+⌫ exit` stays visible all the time; click it to leave fullscreen.
+- **Steel grips** on the left and right edges show that the panes slide out; click one to open or close its pane. Faint labels in the corners name the sides (`◂ library`, `queue ▸` at the top) and their snap keys (`ctrl+a`, `ctrl+e` at the bottom) while the pane is closed. Between the two bottom labels, `ctrl+⌫ exit` stays visible all the time; click it to leave fullscreen. While the `vol` readout is showing, it takes that spot.
 - **Clicks** move the focus to where you click. Clicking empty space in the middle closes the queue. Clicking buttons, the progress bar, the cover and links works as usual.
 
-**Volume.** Scroll the mouse wheel anywhere over the player (not over a pane, where it scrolls the list) to change the volume in steps of 2. A small `vol 64` readout appears at the bottom while you scroll. Every Spotify start begins at full volume (100); after that, the volume you set stays for the session. ivlyrics-sidecar also switches on ivLyrics' own volume slider in fullscreen.
+**Volume.** Scroll the mouse wheel anywhere over the player (not over a pane, where it scrolls the list) to change the volume. One notch of a normal mouse wheel moves it by 10, in steps of 2; a trackpad moves it smoothly, 2 at a time. A small `vol 64` readout appears at the bottom while you scroll. Every Spotify start begins at full volume (100); after that, the volume you set stays for the session. ivlyrics-sidecar also switches on ivLyrics' own volume slider in fullscreen.
 
 Inside either pane, the same keys always do the same thing:
 - **A click, or ↑ and ↓,** only selects. Nothing plays or opens.
@@ -136,7 +136,9 @@ Inside either pane, the same keys always do the same thing:
 
 Tab widens the search at any time, even when there are matches.
 
-**See what's up next (Ctrl+E).** The queue pane slides in from the right. It starts with the current song, highlighted, then lists what's next: your manually queued songs (under "Queue", each marked with a yellow `u`), the rest of the playlist, and Spotify's autoplay picks (under "Recommended", only if autoplay is on). A faint path above the list shows where you are, for example `/queue/faceless/engage war`. A hint below the list reminds you of the keys: `⌫ close · esc player` at the top level, `⌫ back · esc player` inside an album or artist. Above it, a small `feedback · github.com/gigacook/ivlyrics-sidecar/issues` line can be selected and copied.
+**See what's up next (Ctrl+E).** The queue pane slides in from the right. It starts with the current song, highlighted, then lists what's next: your manually queued songs (under "Queue", each marked with a yellow `u`), the rest of the playlist, and Spotify's autoplay picks (under "Recommended", only if autoplay is on). A faint path above the list shows where you are, for example `/queue/faceless/engage war`. A hint below the list reminds you of the keys: `⌫ close · c clear · esc player` at the top level, `⌫ back · esc player` inside an album or artist.
+
+**Clear the queue (C).** With the queue pane focused, press C. Every song you queued yourself (the "Queue" section, marked `u`) is removed, and Spotify shows `Queue cleared`. The rest of the playlist and the autoplay picks stay, as with Spotify's own "Clear queue". If you haven't queued anything, it shows `Nothing queued`. Above it, a small `feedback · github.com/gigacook/ivlyrics-sidecar/issues` line can be selected and copied.
 
 **Albums and artists, without leaving fullscreen.**
 - Clicking the **album name** or the **song title** under the cover opens the album in the queue pane: cover, title, artist and year, then numbered tracks with their lengths.
@@ -156,11 +158,11 @@ All of these work in ivLyrics fullscreen only, except Space, which works everywh
 |---|---|---|
 | Space | Anywhere in Spotify | Plays or pauses. The only exception is a text box that already has text in it, where Space types a space so multi-word searches still work. |
 | Esc | Anywhere | Closes both panes, dialogs, menus and the search. Just the player is left. |
-| Ctrl+Backspace | Anywhere, except a text box with text in it | Leaves fullscreen. Same as clicking `ctrl+⌫ exit` at the top middle. In a text box with text, it deletes the last word. |
+| Ctrl+Backspace | Anywhere, except a text box with text in it | Leaves fullscreen. Same as clicking `ctrl+⌫ exit` at the bottom middle. In a text box with text, it deletes the last word. |
 | Ctrl+A | Anywhere | Library pane open and focused, queue closed, cursor on the top row. Does nothing if you're already there. |
 | Ctrl+E | Anywhere | Queue pane open and focused, library closed, cursor on the top row. Does nothing if you're already there. |
 | F12 | Anywhere | Nothing. ivLyrics' fullscreen key is switched off so it can't leave fullscreen by accident. |
-| Mouse wheel | Over the player | Volume up or down by 2. |
+| Mouse wheel | Over the player | Volume up or down by 10 per notch, in steps of 2. |
 | ← | Middle | Focuses the library pane, opening it if needed. |
 | → | Middle | Focuses the queue pane, opening it if needed. |
 | → | Library pane, cursor at the end of the search text | Closes the library and focuses the middle. |
@@ -168,6 +170,7 @@ All of these work in ivLyrics fullscreen only, except Space, which works everywh
 | ↑ or ↓ | Library or queue pane | Moves the selection. The first press starts from the playing track. |
 | Enter | Library or queue pane | Goes one level in, or plays the selected track. |
 | Backspace | Library or queue pane | Goes one level back, or closes the pane at its top level. In the library, it deletes text while the search box has any. |
+| C | Queue pane | Clears the songs you queued yourself. The playlist and autoplay picks stay. |
 | Q | Library pane, a track selected, search box empty | Puts the selected track first in the queue. With text in the box, Q just types. |
 | Y, Enter or Tab | Library search with no matches | Widens the search: this view, then all playlists, then Spotify. Tab works even with matches. |
 | + or ← | Sync dialog | Moves the lyrics earlier by one step. |
@@ -181,7 +184,7 @@ All of these work in ivLyrics fullscreen only, except Space, which works everywh
 **Where the player sits.** Re-checked every 0.3 seconds, because the controls auto-hide and long titles change the player's height:
 1. Horizontally, the player block (cover down to the controls) is centred in the window.
 2. Vertically, its top sits at 28% of the window height, leaving room for the lyric box above it. If that would push the controls off the bottom, it moves up just enough to fit.
-3. The lyric box fills the space between the panes (at most 440 pixels wide), from near the top of the window down to just above the player.
+3. The lyric box fills the space between the panes (at most 440 pixels wide), from just under the arrow guide at the top down to just above the cover. The line is centred in that space.
 4. The queue list fills the band from 33% to 66% of the window height, or the player's full height if that's taller, so the list lines up with the player.
 
 **Whether a song counts as English.** Once per song, ivlyrics-sidecar reads the song's lyric lines. It counts them as English when nearly all letters are plain A to Z and common English words make up more than 12% of the words. English songs show only the original line; all others show the original plus the translation, when ivLyrics provides one.
@@ -242,10 +245,13 @@ You can't edit that playlist (it belongs to someone else and isn't collaborative
 Your Spotify version doesn't expose the function that hides them. Everything else still works.
 
 **Ctrl+Backspace doesn't leave fullscreen.**
-The library's search box has text in it, so the key deletes a word there instead. Press Esc to clear the search, then Ctrl+Backspace again, or click `ctrl+⌫ exit` at the top middle.
+The library's search box has text in it, so the key deletes a word there instead. Press Esc to clear the search, then Ctrl+Backspace again, or click `ctrl+⌫ exit` at the bottom middle.
 
 **`Couldn't queue <name>`**
 Spotify refused to add the track to the queue. Try again. If it keeps failing, restart Spotify, and if that doesn't help, open an issue with your Spotify version.
+
+**`Couldn't clear the queue`**
+Spotify refused the request. Try again. If it keeps failing, restart Spotify, and if that doesn't help, open an issue with your Spotify version.
 
 **The gear never appears.**
 It only shows while the mouse is near the lyric box, and it's hidden on songs without lyrics.
