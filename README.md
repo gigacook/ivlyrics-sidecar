@@ -95,7 +95,7 @@ The installer refuses to run from an administrator window, because Spicetify fil
 
 **Start from your playlists.** Spotify opens on the Playlists page: your playlists and Liked Songs, grouped by folder, with a filter box at the top. Click one: it starts playing, ivLyrics goes fullscreen and the library pane is already open. When you leave fullscreen, you're back on the Playlists page. In windows 720 pixels tall or less, the page shows names only.
 
-**Get in and out.** Click the deck icon in Spotify's top bar (three bars, the middle one taller) to jump straight into ivLyrics fullscreen from any page. To leave, use the ivLyrics menu in the bottom-right corner and pick "Exit Fullscreen". Esc and ivLyrics' fullscreen key (F12 by default) are switched off for leaving, so you can't be thrown out by accident.
+**Get in and out.** Click the deck icon in Spotify's top bar (three bars, the middle one taller) to jump straight into ivLyrics fullscreen from any page. To leave, press **Ctrl+Backspace**, or click the faint `ctrl+⌫ exit` label at the top middle of the screen, between the `◂ library` and `queue ▸` labels. (The ivLyrics menu in the bottom-right corner, "Exit Fullscreen", still works too.) Esc and ivLyrics' fullscreen key (F12 by default) are switched off for leaving, so you can't be thrown out by accident. While you're typing in the search box, Ctrl+Backspace deletes a word instead; clear the box first.
 
 **The layout.** In ivLyrics fullscreen, the player always sits in the middle of the window. The library pane and the queue pane are the same width (27.5% of the window, between 200 and 380 pixels) and share the same see-through dark background, so the player is never covered, even with both open. ivLyrics' own lyrics column is hidden. Instead, a slim box above the player shows only the line being sung:
 - For English songs, it shows just that line.
@@ -157,6 +157,7 @@ All of these work in ivLyrics fullscreen only, except Space, which works everywh
 | Ctrl+A | Anywhere | Library pane open and focused, queue closed, cursor on the top row. Does nothing if you're already there. |
 | Ctrl+E | Anywhere | Queue pane open and focused, library closed, cursor on the top row. Does nothing if you're already there. |
 | ↑ | Middle | Nothing. |
+| Ctrl+Backspace | Anywhere, except with text in the search box | Leaves fullscreen. Same as clicking `ctrl+⌫ exit` at the top middle. |
 | F12 | Anywhere | Nothing. ivLyrics' fullscreen key is switched off so it can't exit by accident. |
 | Mouse wheel | Over the player | Volume up or down by 2. |
 | ← | Middle | Focuses the library pane, opening it if needed. |
@@ -201,7 +202,7 @@ The file also switches on ivLyrics' fullscreen volume slider (`fullscreen-show-v
 ivlyrics-sidecar also changes a few ivLyrics details no matter which settings you use:
 - ivLyrics' lyrics column is hidden in fullscreen and replaced by the lyric box, so clicking lyrics can no longer jump the song.
 - The "LYRICS PROVIDER" footer, the loading badge, the floating-notes "no lyrics" animation and the presentation switcher that pops up over the cover are hidden.
-- The fullscreen key (F12) no longer exits fullscreen, and the mouse wheel controls volume instead of ivLyrics' font size.
+- The fullscreen key (F12) no longer exits fullscreen (Ctrl+Backspace does), and the mouse wheel controls volume instead of ivLyrics' font size.
 - Right-clicking the cover opens ivlyrics-sidecar's menu instead of ivLyrics' AI research.
 
 ### Updating and removing

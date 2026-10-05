@@ -7,7 +7,8 @@
 // column is hidden; the current line shows in a box above the player.
 //
 // Keys (one dispatcher, onKey): Space play/pause anywhere; Esc back to just
-// the player; F12 is swallowed (leave via the ivLyrics menu);
+// the player; F12 is swallowed; Ctrl+Backspace leaves fullscreen (also the
+// "ctrl+⌫ exit" label at the top middle);
 // Ctrl+A snaps to the library (queue closed), Ctrl+E to the queue (library
 // closed); already there = no change;
 // ← / → move focus between library, middle and queue: entering a side opens
@@ -293,9 +294,9 @@
     }
     body.ivlib-fs #ivlyr-box { display: flex; }
     #ivlyr-box > div { margin: 0; overflow-wrap: anywhere; }
-    #ivlyr-box .o { font-size: 15px; font-weight: 700; line-height: 1.3; }
-    #ivlyr-box.dual .o { font-size: 8px; font-weight: 500; line-height: 1.15; opacity: .75; letter-spacing: -.01em; }
-    #ivlyr-box.dual .t { font-size: 10px; font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
+    #ivlyr-box .o { font-size: 17px; font-weight: 700; line-height: 1.3; }
+    #ivlyr-box.dual .o { font-size: 9px; font-weight: 500; line-height: 1.15; opacity: .75; letter-spacing: -.01em; }
+    #ivlyr-box.dual .t { font-size: 12px; font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
     #ivlyr-box.in > div { animation: ivlyr-in .14s ease-out; }
     @keyframes ivlyr-in { from { opacity: 0; transform: translateY(3px); } }
 
@@ -319,7 +320,10 @@
       position: fixed; z-index: 2147483639; font: 600 10.5px var(--ivmono); letter-spacing: .06em;
       color: #fff; opacity: .28; pointer-events: none; transition: opacity .2s ease;
     }
-    #ivedge-l, #ivedge-r { top: 14px; }
+    #ivedge-l, #ivedge-r, #ivexit { top: 14px; }
+    /* Top middle, between the library and queue labels: leaves fullscreen. */
+    #ivexit { left: 50vw; transform: translateX(-50%); pointer-events: auto; cursor: pointer; -webkit-app-region: no-drag; }
+    #ivexit:hover { opacity: .8; }
     #ivkey-l, #ivkey-r { bottom: 14px; }
     #ivedge-l, #ivkey-l { left: 22px; }
     #ivedge-r, #ivkey-r { right: 22px; }
@@ -397,6 +401,7 @@
     <div class="ivedge" id="ivedge-r">queue ▸</div>
     <div class="ivedge" id="ivkey-l">ctrl+a</div>
     <div class="ivedge" id="ivkey-r">ctrl+e</div>
+    <div class="ivedge" id="ivexit" title="Leave fullscreen (Ctrl+Backspace)">ctrl+⌫ exit</div>
     <div id="ivhint"><span class="lf">lib <svg viewBox="0 0 16 12"><path d="M0 6 7 0v3.6h9v4.8H7V12z" fill="currentColor"/></svg></span><button id="ivhint-dot" title="Show / hide the arrow guide"></button><span class="rt"><svg viewBox="0 0 16 12"><path d="M16 6 9 0v3.6H0v4.8h9V12z" fill="currentColor"/></svg> que</span></div>
     <div id="ivvol"></div>
     <div id="ivnext-divider"><div class="zip"></div><svg class="cog" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.3"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="white" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></div>
@@ -703,12 +708,18 @@
     loadLibrary();
   }
 
-  // Put a track first in the queue without touching what's playing.
+  // Put a track first in the queue without touching what's playing. (Spotify's
+  // PlayerAPI.playAsNextInQueue jumps straight to the track, so not that.)
+  // Inserted before the first upcoming track; an empty queue just appends.
   async function queueNext(v, rowEl) {
     if (!v?.uri) return;
     const P = Spicetify.Platform.PlayerAPI;
     try {
-      if (typeof P?.playAsNextInQueue === "function") await P.playAsNextInQueue([{ uri: v.uri }]);
+      let first = null;
+      try { first = P?.getInternalQueue?.()?.nextTracks?.[0]?.contextTrack ?? null; } catch {}
+      if (first?.uri && typeof P?.insertIntoQueue === "function") {
+        await P.insertIntoQueue([{ uri: v.uri }], { before: { uri: first.uri, uid: first.uid } });
+      } else if (typeof P?.addToQueue === "function") await P.addToQueue([{ uri: v.uri }]);
       else await Spicetify.addToQueue([{ uri: v.uri }]);
       rowEl?.classList.add("queued");
       if (document.body.classList.contains("ivnext-open")) setTimeout(renderNext, 300);
@@ -1304,6 +1315,12 @@
     if (e.key === "F12" || (!field && (e.key ?? "").toLowerCase() === fsKey)) { consume(); return; }
     // 2. Esc: everything closed, just the player.
     if (e.key === "Escape" && !mod) { consume(); resetView(); return; }
+    // Ctrl+Backspace: leave fullscreen, except mid-text (there it deletes a word).
+    if (e.key === "Backspace" && e.ctrlKey && !e.altKey && !e.metaKey && !(field && (field.value ?? field.textContent ?? "").length)) {
+      consume();
+      exitFullscreen();
+      return;
+    }
     // Text fields that aren't ours keep their keys.
     if (field && field !== input && field !== ctx.filterEl) return;
     // 3. Open dialogs.
@@ -1720,7 +1737,8 @@
   const lyr = { el: $("ivlyr-box"), key: "", uri: null, english: null };
   const LINE_SKIP = ".lyrics-lyricsContainer-LyricsLine-translation, .lyrics-lyricsContainer-LyricsLine-phonetic,"
     + " .lyrics-lyricsContainer-LyricsLine-culturalNote, rt";
-  const flat = (t) => (t ?? "").replace(/\s+/g, " ").trim();
+  // Also drops ivLyrics' cultural-note markers ("word[1]").
+  const flat = (t) => (t ?? "").replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
   function lineText(line) {
     const c = line.cloneNode(true);
     c.querySelectorAll(LINE_SKIP).forEach((n) => n.remove());
@@ -1744,7 +1762,11 @@
       lyr.uri = uri;
       lyr.english = lines.length ? looksEnglish(lines.join(" ")) : null;
     }
-    const active = fs?.querySelector(".lyrics-lyricsContainer-LyricsLine-active:not(.lyrics-lyricsContainer-LyricsLine-paddingLine), .lyrics-lyricsContainer-LyricsLine-scrollCurrent");
+    // The scroll anchor is the true current line. Without one, the last
+    // highlighted line: karaoke rows can stay "active" long after they end,
+    // so the first match in the page would freeze on an old line.
+    const active = fs?.querySelector(".lyrics-lyricsContainer-LyricsLine-scrollCurrent")
+      ?? [...(fs?.querySelectorAll(".lyrics-lyricsContainer-LyricsLine-active:not(.lyrics-lyricsContainer-LyricsLine-paddingLine)") ?? [])].pop();
     const orig = active ? lineText(active) : "";
     const tr = flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-translation")?.textContent);
     const dual = !!tr && lyr.english !== true;
@@ -1769,7 +1791,7 @@
   // ivLyrics' hold-to-research, and moves focus to where you click. A click on
   // empty space in the middle also folds the queue away.
   const OWN_UI = "button, a, input, select, [role=button], [role=link], [role=slider], .fullscreen-progress-bar,"
-    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, .ivgrip, #ivhint-dot";
+    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, .ivgrip, #ivhint-dot, #ivexit";
   window.addEventListener("pointerdown", (e) => {
     if (ctx.state && !ctx.el.contains(e.target)) closeCtx();
     if (sync.open && !sync.dlg.contains(e.target) && !sync.gear.contains(e.target)) closeSync();
@@ -1856,6 +1878,11 @@
     }
   }
   window.ivlib.enter = enterFullscreen;
+  function exitFullscreen() {
+    const lc = window.lyricContainer;
+    if (lc?.state?.isFullscreen && typeof lc.toggleFullscreen === "function") lc.toggleFullscreen();
+  }
+  $("ivexit").addEventListener("click", exitFullscreen);
   try {
     const icon = `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="3" height="10" rx=".8"/><rect x="5.5" y="2" width="5" height="12" rx="1"/><rect x="12" y="3" width="3" height="10" rx=".8"/></svg>`;
     new Spicetify.Topbar.Button("ivLyrics deck", icon, () => enterFullscreen());
