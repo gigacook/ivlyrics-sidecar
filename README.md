@@ -12,11 +12,13 @@ ivLyrics has the best-looking fullscreen in Spotify, but it's a dead end: to pic
 - **Up next, at a glance (Ctrl+E).** The current song, what you queued, the rest of the playlist and Spotify's autoplay picks. Press **C** to clear what you queued.
 - **Albums and artists without leaving.** Click the album, title or artist under the cover, or right-click the cover, and they open in the queue pane.
 - **Search that widens when you ask.** It starts in the playlist you're looking at, then one key widens it to all your playlists, and one more to all of Spotify.
-- **Just the line being sung.** A slim box above the cover shows the current lyric line. For songs in other languages, a tiny original sits over the translation.
+- **Just the line being sung.** A slim box above the cover shows the current lyric line. For songs in other languages, a tiny original sits over the translation. Ctrl+Shift+L, T and P switch the box, the translation and the pronunciation on and off.
+- **Save the song you're hearing in one key.** Ctrl+Shift+S adds it to a playlist you pinned once per session, after a one-key confirm. Ctrl+Shift+A picks or changes that playlist.
 - **Out-of-sync lyrics fixed in two clicks.** A faint gear by the lyric box moves this song's lyrics earlier or later.
-- **Built for the keyboard.** The arrow keys move between library, player and queue. Space plays and pauses, comma and period jump 10 seconds back and forward, Esc clears the screen down to the player, and Ctrl+Backspace leaves fullscreen.
+- **Built for the keyboard.** The arrow keys move between library, player and queue. Space plays and pauses, comma and period jump 10 seconds back and forward, Shift with comma or period changes the volume, Esc clears the screen down to the player, and Ctrl+Backspace leaves fullscreen.
+- **Every key in one searchable place.** Ctrl+Shift+H opens a help screen: type what you want to do, and the keys for it light up on a drawn keyboard.
 - **Scroll for volume.** The mouse wheel over the player changes the volume by 10 per notch.
-- **One click in.** A deck icon in Spotify's top bar opens the fullscreen from any page, and Spotify starts on your playlists: pick one and you're in.
+- **Straight in.** Spotify opens directly in the fullscreen with your library, and a deck icon in the top bar brings you back from any page.
 
 | Library pane |
 |---|
@@ -88,21 +90,31 @@ The one-line installer above does the following. To do it by hand from a downloa
    spicetify config custom_apps playlist-home
    ```
 4. Run `spicetify apply` from a normal PowerShell window. Spotify closes and opens again.
-5. Check it worked: Spotify opens on a grid of your playlists, and in ivLyrics fullscreen a small tab sits in the middle of the left edge.
+5. Check it worked: after a few seconds Spotify switches to ivLyrics fullscreen by itself, with steel grips in the middle of the left and right edges and `● lyrics on · ctrl+⇧+h help` at the bottom middle.
 
 The installer refuses to run from an administrator window, because Spicetify files written by an administrator can leave Spotify showing a black window. It also stops if ivLyrics isn't installed.
 
 ### Everyday use
 
-**Start from your playlists.** Spotify opens on the Playlists page: your playlists and Liked Songs, grouped by folder, with a filter box at the top. Click one: it starts playing, ivLyrics goes fullscreen and the library pane is already open. When you leave fullscreen, you're back on the Playlists page. In windows 720 pixels tall or less, the page shows names only.
+**Start in fullscreen.** When Spotify starts, ivlyrics-sidecar opens ivLyrics fullscreen by itself, with the library pane open the first time. On a cold start ivLyrics can take a few seconds to load, so the fullscreen can appear a moment after the window. To switch this off, open your profile menu (your name or picture at the top right) and untick **Open ivLyrics fullscreen at start**; tick it again to switch it back on.
+
+**The Playlists page.** Leaving fullscreen lands on the Playlists page, which is also where Spotify starts when the automatic fullscreen is off: your playlists and Liked Songs, grouped by folder, with a filter box at the top. Click one: it starts playing, ivLyrics goes fullscreen and the library pane is already open. When you leave fullscreen, you're back on the Playlists page. In windows 720 pixels tall or less, the page shows names only.
 
 **Get in and out.** Click the deck icon in Spotify's top bar (three bars, the middle one taller) to jump straight into ivLyrics fullscreen from any page. To leave, press **Ctrl+Backspace**, or click the faint `ctrl+⌫ exit` label at the bottom middle of the screen, between the `ctrl+a` and `ctrl+e` labels. "Exit Fullscreen" in the ivLyrics menu (bottom-right corner) does the same. While the library's search box has text in it, Ctrl+Backspace deletes the last word instead, as it does in any text box; clear the box first, or press Esc. Esc and ivLyrics' fullscreen key (F12 by default) never leave fullscreen, so a stray key press can't throw you out.
 
 **The layout.** In ivLyrics fullscreen, the player always sits in the middle of the window. The library pane and the queue pane are the same width (27.5% of the window, between 200 and 380 pixels) and share the same see-through dark background, so the player is never covered, even with both open. ivLyrics' own lyrics column is hidden. Instead, a slim box between the arrow guide at the top and the cover shows only the line being sung:
-- For English songs, it shows just that line, at 17 pixels.
-- For songs in other languages, it shows the original line very small (9 pixels) with the translation right under it (12 pixels), packed tight with no gap. The translation comes from ivLyrics, so it only appears if translation is turned on there.
+- For English songs, it shows just that line, at 19 pixels.
+- For songs in other languages, it shows the original line small (10.5 pixels) with the translation right under it (14 pixels), packed tight with no gap. The translation comes from ivLyrics, so it only appears if translation is turned on there.
+- With pronunciation switched on, the pronunciation sits between the two in small italics. It comes from ivLyrics too (its first extra line, for example romaji for Japanese), so it only appears if ivLyrics makes one for that song.
 
 The box follows the line ivLyrics is currently on, checked four times a second. ivLyrics' footnote markers for cultural notes (the `[1]` in `Svabo[1]`) are left out.
+
+**Lyrics, translation and pronunciation on or off.** Three switches decide what the lyric box shows. Each is remembered across Spotify restarts, and none of them changes ivLyrics' own settings, so ivLyrics keeps fetching translations in the background either way.
+- **Ctrl+Shift+L** hides or shows the whole lyric box (and its sync gear). It starts on.
+- **Ctrl+Shift+T** hides or shows the translation line. It starts on. With it off, songs in other languages show only the original line, at full size.
+- **Ctrl+Shift+P** shows or hides the pronunciation line. It starts off.
+
+Each press shows the new state at the bottom of the screen for a moment, for example `translation off`. The lyric box switch also has a permanent label at the bottom middle, just above `ctrl+⌫ exit`: `● lyrics on` with a yellow dot, or `○ lyrics off` with a hollow one. Click it to switch. Next to it, `ctrl+⇧+h help` opens the help screen.
 
 While lyrics are still loading, the lyric box shows a quiet `loading lrclib…` (with the provider's name) instead of ivLyrics' loading badge.
 
@@ -115,6 +127,18 @@ While lyrics are still loading, the lyric box shows a quiet `loading lrclib…` 
 - **Clicks** move the focus to where you click. Clicking empty space in the middle closes the queue. Clicking buttons, the progress bar, the cover and links works as usual.
 
 **Volume.** Scroll the mouse wheel anywhere over the player (not over a pane, where it scrolls the list) to change the volume. One notch of a normal mouse wheel moves it by 10, in steps of 2; a trackpad moves it smoothly, 2 at a time. A small `vol 64` readout appears at the bottom while you scroll. Every Spotify start begins at full volume (100); after that, the volume you set stays for the session. ivlyrics-sidecar also switches on ivLyrics' own volume slider in fullscreen.
+
+From the keyboard, hold Shift and press comma to turn the volume up, or Shift and period to turn it down. This works anywhere in Spotify, on any keyboard layout, because it goes by the key's position rather than the character it types. A single press moves the volume by 6, for a quick, clear change. Keep the keys held to keep going: it continues in fine steps of 2, then speeds up to 4 and 6 within about half a second, so you can creep or sweep with the same keys. The same `vol` readout shows the level.
+
+**Add the playing song to a playlist (Ctrl+Shift+S).** Saving songs you like while you listen takes one key once you've chosen where they go:
+1. The first time in a Spotify session, press **Ctrl+Shift+S** (or **Ctrl+Shift+A**). A small picker opens at the top of the screen with a filter box and the playlists you can edit.
+2. Move through the list with **↑** and **↓**, or type part of a name to filter it. Press **Enter** to add the song to the chosen playlist and pin that playlist. Press **Tab** instead to only pin it, without adding anything. With nothing chosen, Enter and Tab use the first playlist in the list. The pinned playlist shows `pinned` at the right of its row.
+3. From now on, **Ctrl+Shift+S** opens a one-line box at the top: the song's name, then `add to <playlist>?` with a blinking block cursor, like a terminal prompt. Press **Enter** (or Ctrl+Shift+S a second time) to add it, or **Esc** or **Backspace** to cancel. Spotify then shows `Added to <playlist>`.
+4. To send songs somewhere else, press **Ctrl+Shift+A** at any time and pick another playlist. That one stays pinned until you change it again.
+
+The pin lasts until Spotify closes, so every new session starts with the picker. If the pinned playlist is deleted or you stop following it, the next Ctrl+Shift+S opens the picker again instead of failing.
+
+**Help (Ctrl+Shift+H).** A dark overlay with a search box, a drawn keyboard and every key ivlyrics-sidecar understands, with where it works. Type what you want to do, for example `add to playlist` or `louder`: the list keeps only the matching commands (every word you type must appear somewhere in the row), the keys of all matches glow violet on the keyboard, and the chosen row's keys light up in yellow. **↑** and **↓** choose a row. Rows marked `↵ run` are actions: press **Enter** or double-click to close the help and do it, for example switch the translation off. **Esc**, Ctrl+Shift+H again or a click outside the box closes it. Clicking `ctrl+⇧+h help` at the bottom middle of the screen opens it too.
 
 Inside either pane, the same keys always do the same thing:
 - **A click, or ↑ and ↓,** only selects. Nothing plays or opens.
@@ -144,7 +168,7 @@ Tab widens the search at any time, even when there are matches.
 **Albums and artists, without leaving fullscreen.**
 - Clicking the **album name** or the **song title** under the cover opens the album in the queue pane: cover, title, artist and year, then numbered tracks with their lengths.
 - Clicking the **artist name** opens the artist's releases, newest first, with year and type. Enter on one opens its tracks.
-- **Right-clicking the cover** opens a small menu: Show album, Show artist, and Add to playlist. Add to playlist shows a filter box and the playlists you can edit. Pick one, or type and press Enter for the first match, and the song is added to the end of it.
+- **Right-clicking the cover** opens a small menu: Show album, Show artist, and Add to playlist. Add to playlist shows a filter box and the playlists you can edit. Click one, or choose with ↑ and ↓ and press Enter (Enter alone takes the first match), and the song is added to the end of it. This adds once and doesn't pin anything.
 
 **Fix lyrics timing.** Move the mouse near the lyric box and a faint gear appears to its right. Click it to open the sync dialog:
 - **◀ + earlier** shows the lyrics sooner; **− ▶ later** shows them later. The number turns blue for earlier and amber for later, the bar grows from the centre in that direction, and the number kicks left or right with each press.
@@ -153,14 +177,24 @@ Tab widens the search at any time, even when there are matches.
 
 ### Keys
 
-All of these work in ivLyrics fullscreen only, except Space, comma and period, which work everywhere in Spotify. Q queues the selected track whenever the search box is empty, so while a track is selected, a search can't start with Q: start with another part of the name instead (`ueen` finds Queen).
+All of these work in ivLyrics fullscreen only, except Space, comma and period (with or without Shift), which work everywhere in Spotify. Q queues the selected track whenever the search box is empty, so while a track is selected, a search can't start with Q: start with another part of the name instead (`ueen` finds Queen). Ctrl+Shift+H shows this table inside Spotify, searchable.
+
+The Ctrl+Shift keys were chosen so that no existing key changes, neither ivlyrics-sidecar's nor Spotify's: Spotify already uses Ctrl+S for shuffle, and Ctrl+A stays the library key.
 
 | Press | Where it works | What happens |
 |---|---|---|
 | Space | Anywhere in Spotify | Plays or pauses. The only exception is a text box that already has text in it, where Space types a space so multi-word searches still work. |
 | , (comma) | Anywhere in Spotify | Jumps 10 seconds back. A small `◀ 10s` shows at the bottom in fullscreen. Same text-box exception as Space. |
 | . (period) | Anywhere in Spotify | Jumps 10 seconds forward (`10s ▶`). Same text-box exception as Space. |
-| Esc | Anywhere | Closes both panes, dialogs, menus and the search. Just the player is left. |
+| Shift+, (comma) | Anywhere in Spotify | Volume up by 6. Held down, it keeps going in steps of 2, speeding up to 4 and then 6. Same text-box exception as Space. |
+| Shift+. (period) | Anywhere in Spotify | Volume down, the same way. |
+| Ctrl+Shift+S | Anywhere | Asks `add to <playlist>?` for the playing song; Enter adds it to the pinned playlist. With no playlist pinned yet, opens the playlist picker. Pressed while the question is showing, it answers yes. |
+| Ctrl+Shift+A | Anywhere | Opens the playlist picker to pin a different playlist. |
+| Ctrl+Shift+L | Anywhere | Lyric box on or off. |
+| Ctrl+Shift+T | Anywhere | Translation line in the lyric box on or off. |
+| Ctrl+Shift+P | Anywhere | Pronunciation line in the lyric box on or off. |
+| Ctrl+Shift+H | Anywhere | Opens or closes the help screen. |
+| Esc | Anywhere | Closes both panes, dialogs, menus, the help and the search. Just the player is left. While the help is open, Esc closes only the help. |
 | Ctrl+Backspace | Anywhere, except a text box with text in it | Leaves fullscreen. Same as clicking `ctrl+⌫ exit` at the bottom middle. In a text box with text, it deletes the last word. |
 | Ctrl+A | Anywhere | Library pane open and focused, queue closed, cursor on the top row. Does nothing if you're already there. |
 | Ctrl+E | Anywhere | Queue pane open and focused, library closed, cursor on the top row. Does nothing if you're already there. |
@@ -180,7 +214,13 @@ All of these work in ivLyrics fullscreen only, except Space, comma and period, w
 | − or → | Sync dialog | Moves the lyrics later by one step. |
 | 1 to 6 | Sync dialog | Picks the step size: 10, 50, 100, 250, 500 or 1000 ms. |
 | 0 | Sync dialog | Resets the offset to 0. |
-| Backspace | Sync dialog or right-click menu | Closes it, or in the playlist picker, goes back to the menu. |
+| Backspace | Sync dialog or right-click menu | Closes it, or in the right-click menu's playlist list, goes back to the menu. |
+| ↑ or ↓ | Playlist picker, right-click playlist list, help | Moves the choice. |
+| Enter | Playlist picker | Adds the song to the chosen playlist (the first one if none is chosen) and pins it. |
+| Tab | Playlist picker | Pins the chosen playlist without adding the song. |
+| Enter | Add-to-playlist question | Adds the song to the pinned playlist. |
+| Esc or Backspace | Playlist picker or add-to-playlist question | Closes it without adding. In the picker, Backspace deletes filter text first. |
+| Enter | Help, on a row marked `↵ run` | Closes the help and does what the row says. |
 
 ### How it decides things
 
@@ -257,7 +297,25 @@ Spotify refused to add the track to the queue. Try again. If it keeps failing, r
 Spotify refused the request. Try again. If it keeps failing, restart Spotify, and if that doesn't help, open an issue with your Spotify version.
 
 **The gear never appears.**
-It only shows while the mouse is near the lyric box, and it's hidden on songs without lyrics.
+It only shows while the mouse is near the lyric box, and it's hidden on songs without lyrics and while the lyric box is switched off.
+
+**The lyric box is gone.**
+It's switched off: the label at the bottom middle reads `○ lyrics off`. Click it or press Ctrl+Shift+L.
+
+**Pronunciation is on, but no pronunciation line shows.**
+The line comes from ivLyrics, which only makes one for some languages and only when its pronunciation (first extra line) is turned on in its translation settings. Turn it on there for that language; ivlyrics-sidecar shows it as soon as ivLyrics has it.
+
+**`Nothing is playing`**
+Ctrl+Shift+S or the picker was used with no song loaded. Start a song, then try again.
+
+**Ctrl+Shift+A opens the library instead of the playlist picker.**
+Spotify treats Ctrl+A as "select all" before the page sees it, and ivlyrics-sidecar tells the two apart by whether Shift is held at that moment. Press Shift first and keep it down while you press Ctrl and A. If it still happens, use Ctrl+Shift+S, which opens the picker whenever nothing is pinned, or the `ctrl+⇧+a` row in the help (Ctrl+Shift+H).
+
+**Ctrl+Shift+S asks for a playlist again.**
+Either Spotify was restarted (the pin lasts one session) or the pinned playlist can no longer be edited. Pick one, and it stays pinned for the rest of the session.
+
+**Spotify doesn't open in fullscreen by itself.**
+The automatic fullscreen only runs when Spotify starts on its home page, and it can be switched off in the profile menu (**Open ivLyrics fullscreen at start**). Check that it's ticked. If ivLyrics takes more than about 15 seconds to load, ivlyrics-sidecar gives up; click the deck icon in the top bar.
 
 **The lyric box shows a translation on an English song, or none on another language.**
 The language guess counts common English words, so very short or mixed-language lyrics can fool it. The translation itself only exists if ivLyrics translation is turned on for that language.
@@ -273,12 +331,16 @@ Files on your computer:
 | Spotify's local storage, key `ivlib:open` | Whether the library pane was open, so it reopens with fullscreen. |
 | Spotify's local storage, key `ivsync:step` | The last sync step size. |
 | Spotify's local storage, key `ivhint:hidden` | Whether you hid the arrow guide with its dot. |
+| Spotify's local storage, keys `ivlyr:on`, `ivlyr:tr`, `ivlyr:ph` | The lyric box, translation and pronunciation switches (`1` on, `0` off). |
+| Spotify's local storage, key `ivlib:autostart` | `0` when you unticked **Open ivLyrics fullscreen at start**. |
+
+The pinned playlist for Ctrl+Shift+S is kept in memory only, never on disk, so it's forgotten when Spotify closes.
 
 Source layout:
 
 | Path | What it does |
 |---|---|
-| `extension/ivlyrics-sidecar.js` | Everything that runs inside ivLyrics fullscreen: layout, lyric box, both panes, focus and keys (one handler, `onKey`), search, album and artist views, right-click menu, sync dialog, window buttons. It never edits ivLyrics; it waits for the fullscreen container and layers on top. |
+| `extension/ivlyrics-sidecar.js` | Everything that runs inside ivLyrics fullscreen: layout, lyric box and its switches, both panes, focus and keys (one handler, `onKey`; Ctrl+Shift commands in `CMDS`), search, album and artist views, right-click menu and playlist picker, help (`HELP` holds the key table), sync dialog, window buttons. It never edits ivLyrics; it waits for the fullscreen container and layers on top. |
 | `apps/playlist-home/` | The Playlists start page. It calls `window.ivlib.launch()` from the extension to play and enter fullscreen. |
 | `settings/ivlyrics-settings.json` | The recommended ivLyrics settings, with personal data removed. |
 | `install.ps1`, `uninstall.ps1` | Installer and uninstaller for Windows. |

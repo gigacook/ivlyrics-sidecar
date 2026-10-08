@@ -18,6 +18,11 @@
 // back (closing the pane at the top). Clicks only select; double-click = Enter.
 // C in the queue pane clears what you queued yourself.
 // Mouse wheel over the player = volume, 10 per notch in steps of 2 (100 at Spotify start).
+// Shift+, / Shift+. volume up / down anywhere (6 at once, holding ramps 2 → 6).
+// Ctrl+Shift (fullscreen): S adds the song to the pinned playlist (asks first;
+// no pin yet = picker), A picks / changes the pinned playlist, H help with
+// command search, L lyric box on/off, T translation on/off, P pronunciation on/off.
+// None of these reuse an existing key, ours or Spotify's (Ctrl+S is its shuffle).
 //
 // Library: playlists open in place, newest tracks first; after a minute away
 // it reopens on the playing playlist; q queues a track next;
@@ -298,9 +303,53 @@
     }
     body.ivlib-fs #ivlyr-box { display: flex; }
     #ivlyr-box > div { margin: 0; overflow-wrap: anywhere; }
-    #ivlyr-box .o { font-size: 17px; font-weight: 700; line-height: 1.3; }
-    #ivlyr-box.dual .o { font-size: 9px; font-weight: 500; line-height: 1.15; opacity: .75; letter-spacing: -.01em; }
-    #ivlyr-box.dual .t { font-size: 12px; font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
+    #ivlyr-box .o { font-size: 19px; font-weight: 700; line-height: 1.3; }
+    #ivlyr-box.dual .o { font-size: 10.5px; font-weight: 500; line-height: 1.15; opacity: .75; letter-spacing: -.01em; }
+    #ivlyr-box.dual .t { font-size: 14px; font-weight: 700; line-height: 1.15; letter-spacing: -.01em; }
+    #ivlyr-box .p { font-size: 10.5px; font-style: italic; line-height: 1.2; opacity: .7; }
+    body.ivlyr-off :is(#ivlyr-box, #ivsync-gear) { display: none !important; }
+    /* Bottom middle, over the exit label: lyric box state + help, both clickable. */
+    #ivstate { bottom: 32px; left: 50vw; transform: translateX(-50%); pointer-events: auto; white-space: nowrap; -webkit-app-region: no-drag; }
+    #ivstate span { cursor: pointer; }
+    #ivstate span:hover { opacity: .8; }
+    #ivstate #ivlyr-tog::before { content: "● "; color: var(--ivplay); }
+    body.ivlyr-off #ivstate #ivlyr-tog::before { content: "○ "; color: inherit; }
+
+    /* Add-to-playlist confirm: a terminal-style row with a blinking block cursor. */
+    .ivconfirm { padding: 8px 10px; font-size: 13px; }
+    .ivconfirm b { color: var(--ivplay); font-weight: 700; }
+    .ivconfirm small { display: block; font-size: 10.5px; opacity: .5; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ivcur { display: inline-block; width: .6em; height: 1.05em; margin-left: 4px; vertical-align: -2px; background: #fff; animation: ivcur 1.06s steps(1, end) infinite; }
+    @keyframes ivcur { 50% { opacity: 0; } }
+    .ivlib-ctx-hint { font-size: 10px; opacity: .45; padding: 5px 10px 3px; white-space: nowrap; }
+
+    /* Help (Ctrl+Shift+H): command search over a keyboard whose keys light up. */
+    #ivhelp { position: fixed; inset: 0; z-index: 2147483647; display: none; place-items: center; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); }
+    body.ivhelp-open #ivhelp { display: grid; }
+    .ivhelp-box {
+      width: min(780px, 92vw); max-height: 88vh; display: flex; flex-direction: column; gap: 10px; padding: 16px; box-sizing: border-box;
+      border-radius: 12px; background: rgba(20,20,24,.97); box-shadow: 0 20px 60px rgba(0,0,0,.6); color: #fff; font-family: var(--ivmono);
+    }
+    .ivhelp-box input {
+      border: 0; outline: 0; border-radius: 8px; padding: 9px 12px; font: 13px var(--ivmono); color: #fff; background: rgba(255,255,255,.1);
+    }
+    .ivkb { display: flex; flex-direction: column; gap: 4px; align-items: center; user-select: none; }
+    .ivkb div { display: flex; gap: 4px; }
+    .ivkb b {
+      min-width: 26px; height: 24px; padding: 0 5px; box-sizing: border-box; display: grid; place-items: center; border-radius: 5px;
+      font-size: 10px; font-weight: 600; color: rgba(255,255,255,.45); background: rgba(255,255,255,.05); box-shadow: inset 0 -2px 0 rgba(0,0,0,.4);
+      transition: background .12s, color .12s, box-shadow .12s;
+    }
+    .ivkb b.hit { color: #fff; background: rgba(150,100,220,.35); }
+    .ivkb b.on { color: #111; background: var(--ivplay); box-shadow: 0 0 12px var(--ivplay-glow); }
+    .ivhelp-list { overflow-y: auto; scrollbar-width: thin; min-height: 120px; }
+    .ivhelp-row { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; padding: 5px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .ivhelp-row:hover { background: rgba(255,255,255,.06); }
+    .ivhelp-row.active { background: var(--ivsel); box-shadow: inset 2px 0 0 var(--ivsel-edge); }
+    .ivhelp-row kbd { font: 700 11px var(--ivmono); color: #ffd666; }
+    .ivhelp-row i { font-style: normal; font-size: 10.5px; opacity: .45; white-space: nowrap; }
+    .ivhelp-row em { font-style: normal; font-size: 10px; color: var(--ivplay); opacity: .8; }
+    .ivhelp-foot { font-size: 10px; opacity: .4; text-align: center; }
     #ivlyr-box.in > div { animation: ivlyr-in .14s ease-out; }
     @keyframes ivlyr-in { from { opacity: 0; transform: translateY(3px); } }
 
@@ -409,6 +458,13 @@
     <div class="ivedge" id="ivkey-l">ctrl+a</div>
     <div class="ivedge" id="ivkey-r">ctrl+e</div>
     <div class="ivedge" id="ivexit" title="Leave fullscreen (Ctrl+Backspace)">ctrl+⌫ exit</div>
+    <div class="ivedge" id="ivstate"><span id="ivlyr-tog" title="Lyric box on / off (Ctrl+Shift+L)"></span> · <span id="ivhelp-tag" title="Keys and commands (Ctrl+Shift+H)">ctrl+⇧+h help</span></div>
+    <div id="ivhelp"><div class="ivhelp-box">
+      <input id="ivhelp-q" type="text" placeholder="Search keys and commands… e.g. add to playlist" autocomplete="off" spellcheck="false">
+      <div class="ivkb" id="ivhelp-kb"></div>
+      <div class="ivhelp-list" id="ivhelp-list"></div>
+      <div class="ivhelp-foot">↑ ↓ choose · ↵ run it · esc close</div>
+    </div></div>
     <div id="ivhint"><span class="lf">lib <svg viewBox="0 0 16 12"><path d="M0 6 7 0v3.6h9v4.8H7V12z" fill="currentColor"/></svg></span><button id="ivhint-dot" title="Show / hide the arrow guide"></button><span class="rt"><svg viewBox="0 0 16 12"><path d="M16 6 9 0v3.6H0v4.8h9V12z" fill="currentColor"/></svg> que</span></div>
     <div id="ivvol"></div>
     <div id="ivnext-divider"><div class="zip"></div><svg class="cog" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.3"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="white" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></div>
@@ -1310,6 +1366,7 @@
   }
   // Esc: back to just the player.
   function resetView() {
+    closeHelp();
     closeSync();
     closeCtx();
     if (search.q || input.value) { clearSearch(); renderList(); }
@@ -1332,7 +1389,14 @@
       if (!e.repeat) Spicetify.Player.togglePlay();
       return;
     }
-    // 1b. , and . : 10 s back / forward anywhere, with the same text-box exception.
+    // 1b. Shift+, / Shift+. : volume up / down, same text-box exception. Matched by
+    // key position (e.code): Shift turns them into < > or ; : depending on layout.
+    if ((e.code === "Comma" || e.code === "Period") && e.shiftKey && !mod && !(field && (field.value ?? field.textContent ?? "").length)) {
+      consume();
+      volumeKey(e.code === "Comma" ? 1 : -1, e.repeat);
+      return;
+    }
+    // 1c. , and . : 10 s back / forward anywhere, with the same text-box exception.
     if ((e.key === "," || e.key === ".") && !mod && !(field && (field.value ?? field.textContent ?? "").length)) {
       consume();
       seekBy(e.key === "," ? -10000 : 10000);
@@ -1342,6 +1406,14 @@
     // F12 (or whatever ivLyrics' fullscreen key is) never leaves; Ctrl+Backspace does.
     const fsKey = (localStorage.getItem("ivLyrics:visual:fullscreen-key") || "f12").toLowerCase();
     if (e.key === "F12" || (!field && (e.key ?? "").toLowerCase() === fsKey)) { consume(); return; }
+    // Ctrl+Shift commands: add to playlist, pick playlist, help, lyric box toggles.
+    if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && CMDS[e.code]) {
+      consume();
+      if (!e.repeat) CMDS[e.code]();
+      return;
+    }
+    // Help owns the keyboard while it's open.
+    if (help.open) { helpKey(e, consume); return; }
     // 2. Esc: everything closed, just the player.
     if (e.key === "Escape" && !mod) { consume(); resetView(); return; }
     // Ctrl+Backspace: leave fullscreen, except mid-text (there it deletes a word).
@@ -1356,8 +1428,11 @@
     if (syncKeys(e)) return;
     if (ctx.state) {
       const inFilter = e.target === ctx.filterEl;
+      const lists = ctx.state.mode === "playlists";
       if (e.key === "Backspace" && !(inFilter && ctx.filterEl.value)) { consume(); ctxBack(); return; }
-      if (e.key === "Enter" && inFilter) { consume(); ctx.views[0]?.act(); return; }
+      if (e.key === "Enter" && (inFilter || ctx.state.mode === "confirm")) { consume(); (ctx.views[ctx.active] ?? ctx.views[0])?.act(); return; }
+      if (lists && (e.key === "ArrowDown" || e.key === "ArrowUp")) { consume(); moveCtx(e.key === "ArrowDown" ? 1 : -1); return; }
+      if (lists && ctx.state.pick && e.key === "Tab") { consume(); pinPlaylist((ctx.views[ctx.active] ?? ctx.views[0])?.pl); return; }
       if (inFilter) return;
     }
     // 4. Snap: Ctrl+A library only, Ctrl+E queue only.
@@ -1380,10 +1455,12 @@
   // the keydown, only a "select_all" control message, sent at once. That
   // message is the snap; the key's release and the page-wide select-all it
   // can trigger are fallbacks. snapKeyAt stops double snaps.
-  let snapKeyAt = 0, ctrlHeld = false, pointerHeld = false;
+  // With Shift held it's Ctrl+Shift+A (pick a playlist), never a snap.
+  let snapKeyAt = 0, ctrlHeld = false, shiftHeld = false, pointerHeld = false;
   try {
     Spicetify.Platform.ControlMessageAPI.getEvents().addListener("message", ({ data } = {}) => {
       if (data?.type !== "select_all" || !document.body.classList.contains("ivlib-fs")) return;
+      if (shiftHeld) { pickHotkey(); return; }
       const el = document.activeElement;
       if (el?.matches?.("input, textarea, [contenteditable='true']") && (el.value ?? el.textContent ?? "").length) return;
       if (Date.now() - snapKeyAt < 600) return;
@@ -1391,13 +1468,14 @@
       snapTo("left");
     });
   } catch (e) { console.warn("[ivlyrics-sidecar] select_all hook unavailable, Ctrl+A snaps on release", e); }
-  window.addEventListener("keydown", (e) => { if (e.key === "Control") ctrlHeld = true; }, true);
+  window.addEventListener("keydown", (e) => { if (e.key === "Control") ctrlHeld = true; else if (e.key === "Shift") shiftHeld = true; }, true);
   window.addEventListener("pointerdown", () => { pointerHeld = true; }, true);
   window.addEventListener("pointerup", () => { pointerHeld = false; }, true);
-  window.addEventListener("blur", () => { ctrlHeld = false; pointerHeld = false; });
+  window.addEventListener("blur", () => { ctrlHeld = false; shiftHeld = false; pointerHeld = false; });
   window.addEventListener("keyup", (e) => {
     if (e.key === "Control") { ctrlHeld = false; return; }
-    if (!document.body.classList.contains("ivlib-fs") || e.altKey || e.metaKey) return;
+    if (e.key === "Shift") { shiftHeld = false; return; }
+    if (!document.body.classList.contains("ivlib-fs") || e.altKey || e.metaKey || e.shiftKey) return;
     if ((e.code !== "KeyA" && e.code !== "KeyE") || !(e.ctrlKey || ctrlHeld)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -1410,6 +1488,7 @@
     const el = e.target?.nodeType === 3 ? e.target.parentElement : e.target;
     if (el?.closest?.("input, textarea, [contenteditable='true']")) return;
     e.preventDefault();
+    if (shiftHeld) return;
     if (Date.now() - snapKeyAt < 600) return;
     snapKeyAt = Date.now();
     snapTo("left");
@@ -1501,7 +1580,7 @@
   }
 
   // ---------- album-cover right-click menu ----------
-  const ctx = { el: $("ivlib-ctx"), state: null, views: [], filterEl: null, editable: null };
+  const ctx = { el: $("ivlib-ctx"), state: null, views: [], active: -1, filterEl: null, editable: null };
 
   // Playlists the current track can be added to: owned or collaborative.
   async function editablePlaylists() {
@@ -1516,6 +1595,7 @@
 
   async function addToPlaylist(pl, trackUri) {
     closeCtx();
+    if (!trackUri) { Spicetify.showNotification?.("Nothing is playing"); return; }
     try {
       await Spicetify.Platform.PlaylistAPI.add(pl.uri, [trackUri], { after: "end" });
       Spicetify.showNotification?.(`Added to ${pl.name}`);
@@ -1541,11 +1621,62 @@
     ctx.el.hidden = true;
     ctx.el.innerHTML = "";
     ctx.filterEl = null;
+    ctx.active = -1;
   }
 
   function ctxBack() {
-    if (ctx.state?.mode === "playlists") { ctx.state.mode = "main"; renderCtx(); }
+    if (ctx.state?.mode === "playlists" && !ctx.state.pick) { ctx.state.mode = "main"; renderCtx(); }
     else closeCtx();
+  }
+
+  function moveCtx(d) {
+    const n = ctx.views.length;
+    if (!n) return;
+    ctx.active = Math.max(0, Math.min(n - 1, (ctx.active < 0 ? -1 : ctx.active) + d));
+    ctx.el.querySelectorAll(".ivlib-ctx-list .ivlib-ctx-item").forEach((el) => el.classList.toggle("active", +el.dataset.i === ctx.active));
+    ctx.el.querySelector(".ivlib-ctx-item.active")?.scrollIntoView({ block: "nearest" });
+  }
+
+  // ---------- add to playlist by key ----------
+  // Ctrl+Shift+S adds the playing song to the pinned playlist after a one-key
+  // confirm (Enter, or Ctrl+Shift+S again). Nothing pinned yet (every Spotify
+  // start) opens the picker; Ctrl+Shift+A opens it any time to change the pin.
+  // In the picker: ↑ ↓ choose, Enter = pin and add, Tab = pin only.
+  let pinned = null; // { uri, name }, this session only
+  const keyBoxXY = () => [Math.round(window.innerWidth / 2 - 150), 56];
+
+  function openPicker() {
+    const [x, y] = keyBoxXY();
+    closeCtx();
+    ctx.state = { mode: "playlists", pick: true, x, y, filter: "", trackUri: Spicetify.Player.data?.item?.uri };
+    renderCtx();
+  }
+
+  let pickAt = 0;
+  function pickHotkey() {
+    if (Date.now() - pickAt < 600) return; // the keydown and Spotify's select_all message can both arrive
+    pickAt = snapKeyAt = Date.now();
+    openPicker();
+  }
+
+  async function addHotkey() {
+    if (ctx.state?.mode === "confirm") return ctx.views[0]?.act(); // pressed twice = yes
+    const item = Spicetify.Player.data?.item;
+    if (!item?.uri) return;
+    // A pin that's no longer an editable playlist (deleted, unfollowed) asks again.
+    if (pinned && !(await editablePlaylists()).some((pl) => pl.uri === pinned.uri)) pinned = null;
+    if (!pinned) return openPicker();
+    const [x, y] = keyBoxXY();
+    closeCtx();
+    ctx.state = { mode: "confirm", x, y, trackUri: item.uri, song: item.name ?? "" };
+    renderCtx();
+  }
+
+  function pinPlaylist(pl) {
+    if (!pl) return;
+    pinned = { uri: pl.uri, name: pl.name };
+    closeCtx();
+    flashReadout(`pinned ${pl.name}`);
   }
 
   async function renderCtx() {
@@ -1560,11 +1691,18 @@
       ctx.el.innerHTML = ctx.views.map((v, i) =>
         `<div class="ivlib-ctx-item${v.disabled ? " disabled" : ""}" data-i="${i}"><span>${v.label}</span><span>${v.arrow ?? ""}</span></div>`).join("");
       ctx.filterEl = null;
+    } else if (st.mode === "confirm") {
+      ctx.views = [{ act: () => addToPlaylist(pinned, st.trackUri) }];
+      ctx.el.innerHTML = `<div class="ivlib-ctx-item ivconfirm" data-i="0"><span><small>${esc(st.song)}</small>add to <b>${esc(pinned.name)}</b>?<i class="ivcur"></i></span></div>
+        <div class="ivlib-ctx-hint">↵ add · ctrl+⇧+a change · esc</div>`;
+      ctx.filterEl = null;
     } else {
       if (!ctx.filterEl) {
-        ctx.el.innerHTML = `<input type="text" placeholder="Add to playlist…" spellcheck="false" autocomplete="off"><div class="ivlib-ctx-list"></div>`;
+        const ph = st.pick ? "Pin a playlist for ctrl+⇧+s…" : "Add to playlist…";
+        ctx.el.innerHTML = `<input type="text" placeholder="${ph}" spellcheck="false" autocomplete="off"><div class="ivlib-ctx-list"></div>`
+          + `<div class="ivlib-ctx-hint">↑ ↓ choose · ↵ ${st.pick ? "add + pin · tab pin only" : "add"} · esc</div>`;
         ctx.filterEl = ctx.el.querySelector("input");
-        ctx.filterEl.addEventListener("input", () => { st.filter = ctx.filterEl.value; renderCtx(); });
+        ctx.filterEl.addEventListener("input", () => { st.filter = ctx.filterEl.value; ctx.active = -1; renderCtx(); });
         ["keydown", "keyup", "keypress"].forEach((t) => ctx.filterEl.addEventListener(t, (e) => e.stopPropagation()));
         setTimeout(() => ctx.filterEl?.focus(), 0);
       }
@@ -1574,9 +1712,10 @@
       if (ctx.state !== st || st.mode !== "playlists") return;
       const needle = (st.filter ?? "").toLowerCase();
       ctx.views = lists.filter((pl) => pl.name?.toLowerCase().includes(needle))
-        .map((pl) => ({ label: pl.name, act: () => addToPlaylist(pl, st.trackUri) }));
+        .map((pl) => ({ label: pl.name, pl, act: () => { if (st.pick) pinned = { uri: pl.uri, name: pl.name }; addToPlaylist(pl, st.trackUri); } }));
       listEl.innerHTML = ctx.views.length
-        ? ctx.views.map((v, i) => `<div class="ivlib-ctx-item" data-i="${i}"><span>${esc(v.label)}</span></div>`).join("")
+        ? ctx.views.map((v, i) => `<div class="ivlib-ctx-item${i === ctx.active ? " active" : ""}" data-i="${i}"><span>${esc(v.label)}</span>`
+          + `<span>${v.pl.uri === pinned?.uri ? "pinned" : ""}</span></div>`).join("")
         : `<div class="ivlib-empty">No playlists match.</div>`;
     }
     // Place at the cursor, kept inside the window.
@@ -1813,17 +1952,20 @@
     const active = fs?.querySelector(".lyrics-lyricsContainer-LyricsLine-scrollCurrent")
       ?? [...(fs?.querySelectorAll(".lyrics-lyricsContainer-LyricsLine-active:not(.lyrics-lyricsContainer-LyricsLine-paddingLine)") ?? [])].pop();
     const orig = active ? lineText(active) : "";
-    const tr = flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-translation")?.textContent);
-    const dual = !!tr && lyr.english !== true;
+    const tr = lyrOpt.tr ? flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-translation")?.textContent) : "";
+    // Pronunciation only exists when ivLyrics makes one (its first-line setting).
+    const ph = lyrOpt.ph ? flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-phonetic")?.textContent) : "";
+    const showTr = !!tr && lyr.english !== true;
+    const dual = showTr || !!ph;
     // ivLyrics' loading pill (hidden) -> a quiet "loading <provider>…" line.
     const pill = !orig && [...(fs?.querySelectorAll(".lyrics-generation-status-stack .lyrics-translation-loading-indicator") ?? [])]
       .find((el) => !/complete|done|success|hidden/i.test(el.dataset.phase ?? ""));
     const loading = pill ? flat(pill.querySelector(".lyrics-generation-status-loading-label")?.textContent).toLowerCase() || "lyrics" : "";
-    const key = `${orig}\u0000${dual ? tr : ""}\u0000${loading}`;
+    const key = `${orig}\u0000${ph}\u0000${showTr ? tr : ""}\u0000${loading}`;
     if (key === lyr.key) return;
     lyr.key = key;
     lyr.el.classList.toggle("dual", dual);
-    lyr.el.innerHTML = orig ? `<div class="o">${esc(orig)}</div>${dual ? `<div class="t">${esc(tr)}</div>` : ""}`
+    lyr.el.innerHTML = orig ? `<div class="o">${esc(orig)}</div>${ph ? `<div class="p">${esc(ph)}</div>` : ""}${showTr ? `<div class="t">${esc(tr)}</div>` : ""}`
       : loading ? `<div class="ld">loading ${esc(loading)}…</div>` : "";
     lyr.el.classList.remove("in");
     void lyr.el.offsetWidth; // restart the fade-in
@@ -1831,13 +1973,147 @@
   }
   setInterval(updateLyricBox, 250);
 
+  // Lyric box switches (remembered): the box itself, translation, pronunciation.
+  // They only change what the box shows, never ivLyrics' own settings.
+  const LYR_OPTS = { on: ["ivlyr:on", "lyrics", true], tr: ["ivlyr:tr", "translation", true], ph: ["ivlyr:ph", "pronunciation", false] };
+  const lyrOpt = Object.fromEntries(Object.entries(LYR_OPTS).map(([k, [store, , def]]) => {
+    const v = localStorage.getItem(store);
+    return [k, v === null ? def : v === "1"];
+  }));
+  function syncLyrUi() {
+    document.body.classList.toggle("ivlyr-off", !lyrOpt.on);
+    $("ivlyr-tog").textContent = `lyrics ${lyrOpt.on ? "on" : "off"}`;
+  }
+  function toggleLyr(k) {
+    lyrOpt[k] = !lyrOpt[k];
+    localStorage.setItem(LYR_OPTS[k][0], lyrOpt[k] ? "1" : "0");
+    syncLyrUi();
+    lyr.key = "";
+    updateLyricBox();
+    flashReadout(`${LYR_OPTS[k][1]} ${lyrOpt[k] ? "on" : "off"}`);
+  }
+  syncLyrUi();
+  $("ivlyr-tog").addEventListener("click", () => toggleLyr("on"));
+  $("ivhelp-tag").addEventListener("click", () => toggleHelp());
+
+  // ---------- help: Ctrl+Shift+H ----------
+  // The README's key table as a searchable list over a keyboard. Matching
+  // commands light their keys faintly, the chosen one brightly; Enter runs it
+  // when it's an action. Search matches every word anywhere in a row.
+  // [keys, keyboard keys, what, where, run?, extra search words?]
+  const HELP = [
+    ["space", ["space"], "Play / pause", "anywhere"],
+    [", / .", [",", "."], "Jump 10 s back / forward", "anywhere", null, "seek skip rewind"],
+    ["⇧+, / ⇧+.", ["⇧", ",", "."], "Volume up / down, hold to speed up", "anywhere", null, "louder quieter sound"],
+    ["wheel", [], "Volume up / down, 10 per notch", "over the player", null, "mouse scroll louder quieter sound"],
+    ["ctrl+⇧+s", ["ctrl", "⇧", "s"], "Add the song to the pinned playlist (asks first)", "fullscreen", () => addHotkey(), "save"],
+    ["ctrl+⇧+a", ["ctrl", "⇧", "a"], "Pick or change the pinned playlist", "fullscreen", () => openPicker(), "add to playlist choose"],
+    ["ctrl+⇧+l", ["ctrl", "⇧", "l"], "Lyric box on / off", "fullscreen", () => toggleLyr("on"), "lyrics hide show"],
+    ["ctrl+⇧+t", ["ctrl", "⇧", "t"], "Translation on / off", "fullscreen", () => toggleLyr("tr"), "lyrics translate"],
+    ["ctrl+⇧+p", ["ctrl", "⇧", "p"], "Pronunciation on / off", "fullscreen", () => toggleLyr("ph"), "lyrics romaji phonetic"],
+    ["ctrl+⇧+h", ["ctrl", "⇧", "h"], "This help", "fullscreen", null, "keys shortcuts"],
+    ["esc", ["esc"], "Close panes, dialogs and search: just the player", "fullscreen", () => resetView()],
+    ["ctrl+⌫", ["ctrl", "⌫"], "Leave fullscreen", "fullscreen", () => exitFullscreen(), "exit quit"],
+    ["ctrl+a", ["ctrl", "a"], "Library pane, queue closed", "fullscreen", () => snapTo("left"), "playlists"],
+    ["ctrl+e", ["ctrl", "e"], "Queue pane, library closed", "fullscreen", () => snapTo("right"), "up next"],
+    ["← / →", ["←", "→"], "Move between library, player and queue", "fullscreen", null, "focus pane"],
+    ["↑ / ↓", ["↑", "↓"], "Move the selection", "panes and pickers"],
+    ["↵", ["↵"], "Go in, or play the selected track", "panes", null, "enter open"],
+    ["⌫", ["⌫"], "One level back, or close the pane", "panes", null, "backspace up"],
+    ["q", ["q"], "Play the selected track next", "library, search box empty", null, "queue"],
+    ["c", ["c"], "Clear the songs you queued", "queue pane", () => clearQueue()],
+    ["y / ↵ / tab", ["y", "↵", "tab"], "Widen the search: this view, all playlists, Spotify", "library search", null, "find"],
+    ["tab", ["tab"], "Pin the chosen playlist without adding", "playlist picker"],
+    ["+ / −", ["=", "-"], "Lyrics earlier / later by one step", "sync dialog", null, "offset timing"],
+    ["1 – 6", ["1", "2", "3", "4", "5", "6"], "Sync step: 10, 50, 100, 250, 500, 1000 ms", "sync dialog", null, "offset timing"],
+    ["0", ["0"], "Reset the sync offset", "sync dialog", null, "timing"],
+    ["f12", ["f12"], "Nothing: can't leave fullscreen by accident", "fullscreen"],
+    ["right-click cover", [], "Show album, show artist, add to playlist", "player", null, "menu"],
+    ["click title / artist", [], "Open the album or artist in the queue pane", "player"],
+  ];
+  // Ctrl+Shift + key, from onKey.
+  const CMDS = {
+    KeyS: () => addHotkey(), KeyA: () => pickHotkey(), KeyH: () => toggleHelp(),
+    KeyL: () => toggleLyr("on"), KeyT: () => toggleLyr("tr"), KeyP: () => toggleLyr("ph"),
+  };
+  const KB = [
+    ["esc", "f12"],
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "⌫"],
+    ["tab", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l", "↵"],
+    ["⇧", "z", "x", "c", "v", "b", "n", "m", ",", ".", "⇧"],
+    ["ctrl", "space", "←", "↑", "↓", "→"],
+  ];
+  const help = { open: false, active: 0, rows: [] };
+  const helpQ = $("ivhelp-q"), helpList = $("ivhelp-list"), helpKb = $("ivhelp-kb");
+  helpKb.innerHTML = KB.map((row) => `<div>${row.map((k) =>
+    `<b data-k="${esc(k)}" style="${k === "space" ? "min-width:170px" : k.length > 1 && k !== "f12" || "⇧⌫↵".includes(k) ? "min-width:44px" : ""}">${esc(k)}</b>`).join("")}</div>`).join("");
+
+  function renderHelp() {
+    const words = helpQ.value.toLowerCase().split(/\s+/).filter(Boolean);
+    help.rows = HELP.filter((c) => {
+      const hay = `${c[0]} ${c[2]} ${c[3]} ${c[5] ?? ""}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+    help.active = Math.max(0, Math.min(help.active, help.rows.length - 1));
+    helpList.innerHTML = help.rows.map((c, i) => `<div class="ivhelp-row${i === help.active ? " active" : ""}" data-i="${i}">`
+      + `<kbd>${esc(c[0])}</kbd><span>${esc(c[2])}${c[4] ? " <em>↵ run</em>" : ""}</span><i>${esc(c[3])}</i></div>`).join("")
+      || `<div class="ivlib-empty">No command matches.</div>`;
+    const hit = new Set(words.length ? help.rows.flatMap((c) => c[1]) : []);
+    const on = new Set(help.rows[help.active]?.[1] ?? []);
+    helpKb.querySelectorAll("b").forEach((b) => {
+      b.classList.toggle("on", on.has(b.dataset.k));
+      b.classList.toggle("hit", hit.has(b.dataset.k));
+    });
+    helpList.querySelector(".ivhelp-row.active")?.scrollIntoView({ block: "nearest" });
+  }
+  function openHelp() {
+    help.open = true;
+    help.active = 0;
+    helpQ.value = "";
+    document.body.classList.add("ivhelp-open");
+    renderHelp();
+    setTimeout(() => helpQ.focus({ preventScroll: true }), 0);
+  }
+  function closeHelp() {
+    if (!help.open) return;
+    help.open = false;
+    document.body.classList.remove("ivhelp-open");
+    if (document.activeElement === helpQ) helpQ.blur();
+    if (focus.zone === "left") setFocus("left");
+  }
+  const toggleHelp = () => (help.open ? closeHelp() : openHelp());
+  function runHelp(c) {
+    if (!c?.[4]) return;
+    closeHelp();
+    c[4]();
+  }
+  function helpKey(e, consume) {
+    const k = e.key;
+    if (k === "Escape") { consume(); closeHelp(); }
+    else if (k === "ArrowDown" || k === "ArrowUp") { consume(); help.active += k === "ArrowDown" ? 1 : -1; renderHelp(); }
+    else if (k === "Enter") { consume(); runHelp(help.rows[help.active]); }
+    else if (k.length === 1 && e.target !== helpQ) helpQ.focus({ preventScroll: true });
+  }
+  helpQ.addEventListener("input", () => { help.active = 0; renderHelp(); });
+  ["keydown", "keyup", "keypress"].forEach((t) => helpQ.addEventListener(t, (e) => e.stopPropagation()));
+  helpList.addEventListener("click", (e) => {
+    const row = e.target.closest(".ivhelp-row");
+    if (row) { help.active = +row.dataset.i; renderHelp(); }
+  });
+  helpList.addEventListener("dblclick", (e) => {
+    const row = e.target.closest(".ivhelp-row");
+    if (row) runHelp(help.rows[+row.dataset.i]);
+  });
+
   // ---------- pointer: one dispatcher ----------
   // Closes menus on outside clicks, keeps the cover's right-press away from
   // ivLyrics' hold-to-research, and moves focus to where you click. A click on
   // empty space in the middle also folds the queue away.
   const OWN_UI = "button, a, input, select, [role=button], [role=link], [role=slider], .fullscreen-progress-bar,"
-    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, .ivgrip, #ivhint-dot, #ivexit";
+    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, .ivgrip, #ivhint-dot, #ivexit, #ivstate, #ivhelp";
   window.addEventListener("pointerdown", (e) => {
+    if (help.open && !e.target?.closest?.(".ivhelp-box, #ivhelp-tag")) closeHelp();
     if (ctx.state && !ctx.el.contains(e.target)) closeCtx();
     if (sync.open && !sync.dlg.contains(e.target) && !sync.gear.contains(e.target)) closeSync();
     if (e.button === 2 && onAlbumCover(e)) { e.stopImmediatePropagation(); return; }
@@ -1874,6 +2150,13 @@
     const v = Math.max(0, Math.min(100, cur + d));
     Spicetify.Player.setVolume(v / 100);
     flashReadout(`vol ${v}`);
+  }
+  // Shift+, / Shift+. : a press jumps 6; holding (key repeat, ~30/s) starts
+  // fine at 2 and ramps to 4, then 6, every ~0.2 s. Even steps keep stepVolume's grid.
+  let volRepeats = 0;
+  function volumeKey(dir, repeat) {
+    volRepeats = repeat ? volRepeats + 1 : 0;
+    stepVolume(dir * (repeat ? Math.min(6, 2 + 2 * Math.floor(volRepeats / 6)) : 6));
   }
   window.addEventListener("wheel", (e) => {
     if (!document.body.classList.contains("ivlib-fs")) return;
@@ -1922,11 +2205,11 @@
     },
   };
 
-  // Open ivLyrics fullscreen from anywhere (top-bar button).
-  async function enterFullscreen() {
+  // Open ivLyrics fullscreen from anywhere (top-bar button, and at Spotify start).
+  async function enterFullscreen(tries = 40) {
     if (document.body.classList.contains("ivlib-fs")) return;
     if (!Spicetify.Platform.History.location.pathname.startsWith("/ivLyrics")) Spicetify.Platform.History.push("/ivLyrics");
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < tries; i++) {
       const lc = window.lyricContainer;
       if (typeof lc?.toggleFullscreen === "function") { if (!lc.state?.isFullscreen) lc.toggleFullscreen(); return; }
       await new Promise((r) => setTimeout(r, 100));
@@ -1943,13 +2226,29 @@
     new Spicetify.Topbar.Button("ivLyrics deck", icon, () => enterFullscreen());
   } catch (e) { console.warn("[ivlyrics-sidecar] top-bar button unavailable", e); }
 
-  // Start on playlist-home (if installed) instead of Spotify's home feed.
+  // At Spotify start: straight into fullscreen with the library pane (unless
+  // switched off in the profile menu), else playlist-home (if installed)
+  // instead of Spotify's home feed. Leaving fullscreen lands on that start page.
+  const STORE_AUTO = "ivlib:autostart";
+  const autoStart = () => localStorage.getItem(STORE_AUTO) !== "0";
   try {
     const H = Spicetify.Platform.History;
-    if (Spicetify.Config?.custom_apps?.includes("playlist-home") && ["/", "/home"].includes(H.location.pathname)) {
-      H.replace("/playlist-home");
+    const home = Spicetify.Config?.custom_apps?.includes("playlist-home") ? "/playlist-home" : null;
+    if (["/", "/home"].includes(H.location.pathname)) {
+      if (home) H.replace(home);
+      if (autoStart()) {
+        if (localStorage.getItem(STORE_OPEN) === null) localStorage.setItem(STORE_OPEN, "1");
+        returnPath = home ?? "/";
+        enterFullscreen(150); // ivLyrics can take several seconds to load on a cold start
+      }
     }
   } catch (e) { console.warn("[ivlyrics-sidecar] start-page redirect failed", e); }
+  try {
+    new Spicetify.Menu.Item("Open ivLyrics fullscreen at start", autoStart(), (item) => {
+      localStorage.setItem(STORE_AUTO, autoStart() ? "0" : "1");
+      item.setState(autoStart());
+    }).register();
+  } catch (e) { console.warn("[ivlyrics-sidecar] profile-menu item unavailable", e); }
 
   // Show only while ivLyrics is fullscreen.
   const syncFs = () => {
@@ -1967,6 +2266,7 @@
       startBand(true);
     } else {
       if (state.open) state.hiddenAt = Date.now();
+      closeHelp();
       closeCtx();
       closeSync();
       setFocus(null);
