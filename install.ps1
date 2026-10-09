@@ -1,15 +1,15 @@
-# ivlyrics-sidecar installer (Windows, PowerShell 5+).
+# spotiflux installer (Windows, PowerShell 5+).
 # Run from a cloned repo:   .\install.ps1
-# Or straight from GitHub:  irm https://raw.githubusercontent.com/gigacook/ivlyrics-sidecar/main/install.ps1 | iex
+# Or straight from GitHub:  irm https://raw.githubusercontent.com/gigacook/spotiflux/main/install.ps1 | iex
 # Copies the extension and the playlist-home app into Spicetify, registers them
 # and runs `spicetify apply` (Spotify restarts).
 
 $ErrorActionPreference = "Stop"
-$Repo = "https://raw.githubusercontent.com/gigacook/ivlyrics-sidecar/main"
+$Repo = "https://raw.githubusercontent.com/gigacook/spotiflux/main"
 
 function Say($msg, $color = "Gray") { Write-Host "  $msg" -ForegroundColor $color }
 
-Write-Host "`nivlyrics-sidecar installer`n" -ForegroundColor Cyan
+Write-Host "`nspotiflux installer`n" -ForegroundColor Cyan
 
 # Spicetify refuses to run elevated (it can leave Spotify with a black window).
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
@@ -26,15 +26,9 @@ $extDir = Join-Path $userData "Extensions"
 $appDir = Join-Path $userData "CustomApps\playlist-home"
 New-Item -ItemType Directory -Force -Path $extDir, $appDir | Out-Null
 
-if (-not (Test-Path (Join-Path $userData "CustomApps\ivLyrics"))) {
-  Say "ivLyrics is not installed as a Spicetify custom app. ivlyrics-sidecar needs it." Yellow
-  Say "Install ivLyrics first (Spicetify Marketplace), then run this again." Yellow
-  return
-}
-
 # Local clone if available, else download from GitHub.
 $files = @{
-  "extension/ivlyrics-sidecar.js"     = Join-Path $extDir "ivlyrics-sidecar.js"
+  "extension/spotiflux.js"            = Join-Path $extDir "spotiflux.js"
   "apps/playlist-home/index.js"       = Join-Path $appDir "index.js"
   "apps/playlist-home/manifest.json"  = Join-Path $appDir "manifest.json"
 }
@@ -46,18 +40,21 @@ foreach ($src in $files.Keys) {
   Say "copied $src"
 }
 
-# Pre-release builds were called ivlyrics-library.js; swap it out if present.
-$old = Join-Path $extDir "ivlyrics-library.js"
-if (Test-Path $old) {
-  spicetify config extensions ivlyrics-library.js- 2>$null | Out-Null
-  Remove-Item $old -Force
-  Say "removed old ivlyrics-library.js"
+# Earlier names of this extension: ivlyrics-library.js (pre-release) and
+# ivlyrics-sidecar.js (1.x). Unregister and delete them so only one copy runs.
+# Settings stay: they live in Spotify's local storage, not in these files.
+foreach ($name in "ivlyrics-library.js", "ivlyrics-sidecar.js") {
+  $old = Join-Path $extDir $name
+  # try: on Windows PowerShell, stderr from a name that isn't registered would stop the script.
+  try { spicetify config extensions "$name-" 2>$null | Out-Null } catch {}
+  if (Test-Path $old) { Remove-Item $old -Force; Say "removed old $name" }
 }
 
-spicetify config extensions ivlyrics-sidecar.js | Out-Null
+spicetify config extensions spotiflux.js | Out-Null
 spicetify config custom_apps playlist-home | Out-Null
 Say "registered extension + playlist-home app"
 
 Say "running spicetify apply (Spotify will restart)..." Cyan
 spicetify apply
-Write-Host "`nDone. Click the deck icon in Spotifys top bar, then press Left or Right.`n" -ForegroundColor Green
+Write-Host "`nDone. Spotify opens straight into the spotiflux deck (or click the deck icon in the top bar)." -ForegroundColor Green
+Write-Host "Press Ctrl+Shift+H in the deck for every key. Settings: profile menu > spotiflux settings.`n" -ForegroundColor Green

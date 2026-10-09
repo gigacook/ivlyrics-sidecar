@@ -1,10 +1,14 @@
-// ivlyrics-sidecar — Spicetify extension that rides along with ivLyrics.
-// It never edits ivLyrics: it waits for ivLyrics fullscreen
-// (`.lyrics-lyricsContainer-LyricsContainer.fullscreen-active`) and layers on top.
+// spotiflux — Spicetify extension: a fullscreen deck inside Spotify, and a
+// local WebSocket bridge that sends Spotify out to native apps.
 //
-// Layout: library pane | player | queue pane. Both panes take the same slice
-// of the window so the centred player is never covered. ivLyrics' lyrics
-// column is hidden; the current line shows in a box above the player.
+// Layout: library pane | player | queue pane over our own deck
+// (#spotiflux-deck, body.ivlib-fs). Both panes take the same slice of the
+// window so the centred player is never covered. The current lyric line shows
+// in a box above the player (own lyrics: Spotify's, else LRCLIB; translation
+// and pronunciation from Gemini with the user's key).
+//
+// Bridge: client to ws://127.0.0.1:<port> (default 47474), protocol
+// spotiflux-bridge v1 (docs/bridge.md). Read-only unless "allow control" is on.
 //
 // Keys (one dispatcher, onKey): Space play/pause and , / . 10 s back / forward
 // anywhere (not mid-text in a text box); Esc back to just
@@ -31,13 +35,17 @@
 // from the title, album and artist links and the cover's right-click menu.
 // Also: per-track sync offset dialog (gear by the lyric box), hidden window
 // buttons until hovered, and window.ivlib.launch() for playlist-home.
-(function ivlyricsSidecar() {
+//
+// Storage keys and CSS ids keep their old ivlyrics-sidecar prefixes (ivlib:,
+// ivlyr:, ivsync:, ivhint:, #iv…) so existing users keep their state; new
+// keys use the spotiflux: prefix.
+(function spotiflux() {
   if (!window.Spicetify?.Platform?.LibraryAPI || !Spicetify.Player || !document.body) {
-    setTimeout(ivlyricsSidecar, 300);
+    setTimeout(spotiflux, 300);
     return;
   }
 
-  const FS_SELECTOR = ".lyrics-lyricsContainer-LyricsContainer.fullscreen-active";
+  const VERSION = "2.0.0";
   const STORE_OPEN = "ivlib:open";
   const PANEL_W = 300;
   const TYPE_LABEL = { playlist: "Playlist", album: "Album", artist: "Artist", show: "Podcast", folder: "Folder", collection: "Liked", track: "Song" };
@@ -162,11 +170,6 @@
     }
     body.ivnext-open #ivnext-panel { transform: none; }
     body:not(.ivnext-open) #ivnext-list { pointer-events: none !important; }
-    /* ivLyrics' lyrics column is replaced by the lyric box; it keeps running
-       (the box reads its active line) but is never shown or clickable. */
-    body.ivlib-fs ${FS_SELECTOR} :is(.lyrics-lyricsContainer-SyncedLyricsPage, .lyrics-lyricsContainer-UnsyncedLyricsPage, .lyrics-lyricsContainer-LyricsUnavailablePage) {
-      visibility: hidden !important; pointer-events: none !important;
-    }
     #ivnext-list {
       position: absolute; left: 28px; right: 24px; padding: 6px 0; pointer-events: auto;
       top: var(--ivnext-top, 33vh); bottom: var(--ivnext-bottom, 34vh);
@@ -195,10 +198,7 @@
     #ivnext-list .ivlib-row.current { opacity: 1; background: rgba(255,255,255,.1); }
     #ivnext-list .ivlib-row.current .ivlib-name { color: var(--ivplay); text-shadow: 0 0 8px var(--ivplay-glow); }
     #ivnext-list .ivlib-name { font-size: 13px; }
-    /* Presentation switcher (standard/vinyl/video stage) pops up on album hover
-       and is too easy to hit by accident. */
-    .fullscreen-presentation-dock { display: none !important; }
-    /* Album-cover right-click menu (replaces ivLyrics' AI "research"). */
+    /* Album-cover right-click menu. */
     #ivlib-ctx {
       position: fixed; z-index: 2147483647; min-width: 200px; max-width: 280px; padding: 4px;
       border-radius: 8px; background: rgba(24,24,28,.97); box-shadow: 0 10px 30px rgba(0,0,0,.5);
@@ -213,8 +213,6 @@
       width: 100%; box-sizing: border-box; border: 0; outline: 0; border-radius: 6px; padding: 6px 8px;
       margin-bottom: 4px; font-size: 12px; color: #fff; background: rgba(255,255,255,.1);
     }
-    /* ivLyrics' hover hint advertising the AI right-click. */
-    .album-mode-hint .album-mode-action.is-secondary { display: none !important; }
 
     /* Right pane breadcrumb + album view. */
     #ivnext-crumb, #ivnext-hint {
@@ -430,14 +428,58 @@
     #ivvol.on { opacity: .75; transition: opacity .05s linear; }
     #ivlib-root:has(#ivvol.on) #ivexit { opacity: 0; } /* same spot: the readout wins */
 
-    /* ivLyrics' loading pill moves into the lyric box. */
-    body.ivlib-fs .lyrics-generation-status-stack { display: none !important; }
     #ivlyr-box .ld { font-size: 10px; letter-spacing: .06em; opacity: .45; }
 
-    /* ivLyrics' "LYRICS PROVIDER <name>" footer: gone. */
-    .lyrics-lyricsContainer-Provider { display: none !important; }
-    /* ivLyrics' floating-notes "no lyrics" animation: never. */
-    svg.lyrics-noLyricsMotion { display: none !important; }
+    /* The deck: our own fullscreen over the whole window. Blurred, darkened
+       cover behind; the player block is placed by layout() (--sfx-top). */
+    #spotiflux-deck { position: fixed; inset: 0; z-index: 2147483600; overflow: hidden; background: #000; color: #fff; font-family: var(--ivmono); }
+    .sfx-bg { position: absolute; inset: -80px; background: center / cover no-repeat; filter: blur(56px) brightness(.36) saturate(1.25); transition: background-image .4s; }
+    #sfx-player {
+      position: absolute; left: 50vw; top: var(--sfx-top, 28vh); transform: translateX(-50%); width: var(--sfx-cover, 300px);
+      display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+    }
+    #sfx-cover { width: var(--sfx-cover, 300px); height: var(--sfx-cover, 300px); border-radius: 6px; object-fit: cover; background: rgba(255,255,255,.06); box-shadow: 0 18px 50px rgba(0,0,0,.55); margin-bottom: 8px; }
+    #sfx-cover:not([src]) { visibility: hidden; }
+    #sfx-title { font-size: 16px; font-weight: 700; line-height: 1.25; }
+    #sfx-artist { font-size: 12.5px; opacity: .8; }
+    #sfx-album { font-size: 11px; opacity: .5; }
+    .sfx-link { cursor: pointer; max-width: 100%; overflow-wrap: anywhere; }
+    .sfx-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .sfx-prog { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 6px; font-size: 10.5px; opacity: .75; font-variant-numeric: tabular-nums; }
+    .sfx-bar { flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; }
+    .sfx-bar::before { content: ""; flex: 1; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #fff var(--sfx-p, 0%), rgba(255,255,255,.2) var(--sfx-p, 0%)); }
+    .sfx-bar:hover::before { height: 5px; }
+    .sfx-ctl { display: flex; align-items: center; justify-content: center; gap: 14px; }
+    .sfx-ctl button { border: 0; background: none; color: #fff; cursor: pointer; padding: 4px; opacity: .7; display: grid; place-items: center; position: relative; }
+    .sfx-ctl button:hover { opacity: 1; }
+    .sfx-ctl svg { width: 18px; height: 18px; }
+    .sfx-ctl #sfx-play { opacity: 1; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #000; }
+    .sfx-ctl #sfx-play svg { width: 16px; height: 16px; }
+    .sfx-ctl button.on { color: var(--ivplay); opacity: 1; filter: drop-shadow(0 0 4px var(--ivplay-glow)); }
+    .sfx-ctl button[data-one]::after { content: "1"; position: absolute; right: -2px; top: -1px; font-size: 8px; font-weight: 800; }
+    .sfx-vol { display: flex; align-items: center; gap: 8px; width: 70%; font-size: 10.5px; opacity: .55; }
+    .sfx-vol:hover { opacity: .9; }
+    .sfx-vol input { flex: 1; accent-color: #fff; height: 3px; cursor: pointer; }
+    .sfx-vol span { width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Settings dialog (profile menu): sync-dialog look, centred over anything. */
+    #sfx-settings { position: fixed; inset: 0; z-index: 2147483647; display: none; place-items: center; background: rgba(0,0,0,.5); font-family: var(--ivmono); }
+    body.sfx-settings-open #sfx-settings { display: grid; }
+    .sfx-set-box { width: min(440px, 92vw); padding: 14px 16px; box-sizing: border-box; border-radius: 10px; background: rgba(20,20,24,.97); box-shadow: 0 14px 40px rgba(0,0,0,.55); color: #fff; font-size: 12px; }
+    .sfx-set-box h3 { margin: 12px 0 6px; font-size: 11px; font-weight: 400; letter-spacing: .08em; text-transform: uppercase; opacity: .5; }
+    .sfx-set-box h3:first-of-type { margin-top: 2px; }
+    .sfx-set-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    .sfx-set-row label { flex: none; width: 92px; opacity: .75; }
+    .sfx-set-row input[type=text], .sfx-set-row input[type=password], .sfx-set-row input[type=number] {
+      flex: 1; min-width: 0; border: 0; outline: 0; border-radius: 6px; padding: 6px 8px; font: 12px var(--ivmono); color: #fff; background: rgba(255,255,255,.1);
+    }
+    .sfx-set-row input:focus { background: rgba(255,255,255,.16); }
+    .sfx-set-row .ivlib-btn, .sfx-set-foot .ivlib-btn { font-family: inherit; }
+    .sfx-set-check { display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer; }
+    .sfx-set-check input { accent-color: var(--ivplay); }
+    .sfx-set-note { font-size: 10.5px; opacity: .5; margin: 2px 0 0; line-height: 1.4; }
+    #sfx-bridge-status { font-size: 11px; margin: 6px 0 0; color: var(--ivplay); opacity: .85; }
+    .sfx-set-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 10.5px; opacity: .8; }
     /* Short windows: names only, no artwork or meta line. */
     @media (max-height: 720px) {
       .ivlib-img, .ivlib-sub { display: none; }
@@ -450,7 +492,33 @@
   // ---------- DOM ----------
   const root = document.createElement("div");
   root.id = "ivlib-root";
+  // Player-button icons (16 x 16).
+  const ICON = {
+    shuffle: "M11 2l3 2.5L11 7V5.3H9.6L7.9 7.4 6.8 6l1.5-1.8.4-.5h2.3zM1 4.2h2.6l6 7.1H11V9.7L14 12l-3 2.5v-1.7H9l-6-7.1H1zm0 7.1h2.1l1.7-2 1 1.3-2 2.2H1z",
+    prev: "M3 2h2v12H3zm3 6 8-6v12z", next: "M11 2h2v12h-2zM10 8 2 14V2z",
+    play: "M4 2l10 6-10 6z", pause: "M3 2h4v12H3zm6 0h4v12H9z",
+    repeat: "M3 5h8V3l3 3-3 3V7H5v2.5H3zm10 6H5v2l-3-3 3-3v2h6V6.5h2z",
+  };
+  const icon = (d) => `<svg viewBox="0 0 16 16" fill="currentColor"><path d="${d}"/></svg>`;
   root.innerHTML = `
+    <div id="spotiflux-deck">
+      <div class="sfx-bg" id="sfx-bg"></div>
+      <div id="sfx-player">
+        <img id="sfx-cover" alt="" title="Right-click: show album, show artist, add to playlist">
+        <div id="sfx-title" class="sfx-link" title="Open the album"></div>
+        <div id="sfx-artist" class="sfx-link" title="Open the artist"></div>
+        <div id="sfx-album" class="sfx-link" title="Open the album"></div>
+        <div class="sfx-prog"><span id="sfx-pos">0:00</span><div class="sfx-bar" id="sfx-bar"></div><span id="sfx-dur">0:00</span></div>
+        <div class="sfx-ctl">
+          <button id="sfx-shuffle" title="Shuffle">${icon(ICON.shuffle)}</button>
+          <button id="sfx-prev" title="Previous">${icon(ICON.prev)}</button>
+          <button id="sfx-play" title="Play / pause (Space)">${icon(ICON.play)}</button>
+          <button id="sfx-next" title="Next">${icon(ICON.next)}</button>
+          <button id="sfx-repeat" title="Repeat">${icon(ICON.repeat)}</button>
+        </div>
+        <div class="sfx-vol"><span>vol</span><input id="sfx-vol" type="range" min="0" max="100" step="2" title="Volume (wheel, Shift+, / Shift+.)"><span id="sfx-volv"></span></div>
+      </div>
+    </div>
     <button id="ivlib-tab" class="ivgrip" title="Library (Ctrl+A)"></button>
     <button id="ivnext-tab" class="ivgrip" title="Queue (Ctrl+E)"></button>
     <div class="ivedge" id="ivedge-l">◂ library</div>
@@ -473,7 +541,7 @@
     <button id="ivsync-gear" title="Lyrics sync offset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="5.2"/><circle cx="12" cy="12" r="1.8"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<rect x="10.8" y="2.6" width="2.4" height="3.2" rx=".5" fill="currentColor" stroke="none" transform="rotate(${k * 45} 12 12)"/>`).join("")}</svg></button>
     <div id="ivsync-dlg"></div>
     <aside id="ivnext-panel">
-      <div id="ivnext-feedback">feedback · github.com/gigacook/ivlyrics-sidecar/issues</div>
+      <div id="ivnext-feedback">feedback · github.com/gigacook/spotiflux/issues</div>
       <div id="ivnext-crumb"></div>
       <div id="ivnext-hint"></div>
       <div class="ivlib-list" id="ivnext-list"></div>
@@ -511,7 +579,7 @@
         state.items = res?.items ?? [];
       }
     } catch (e) {
-      console.error("[ivlyrics-sidecar] load failed", e);
+      console.error("[spotiflux] load failed", e);
       state.items = [];
     }
     if (at === here()) renderList(); // ignore if the user navigated meanwhile
@@ -558,7 +626,7 @@
         else out.push(it);
       }
     };
-    try { await walk(null); } catch (e) { console.error("[ivlyrics-sidecar] flatten failed", e); }
+    try { await walk(null); } catch (e) { console.error("[spotiflux] flatten failed", e); }
     return (flatCache = out);
   }
 
@@ -576,7 +644,7 @@
         while (i < lists.length && trackIndex === idx) {
           const pl = lists[i++];
           try { idx.tracks.push(...await loadTracks({ uri: pl.uri, name: pl.name, type: pl.type })); }
-          catch (e) { console.warn("[ivlyrics-sidecar] index skip", pl.name, e); }
+          catch (e) { console.warn("[spotiflux] index skip", pl.name, e); }
           idx.done++;
           onProgress();
         }
@@ -611,7 +679,7 @@
         try {
           chunkText[chunk] ??= await fetch(chunk).then((r) => r.text());
           hash = chunkText[chunk].match(new RegExp(`"${name}","query","([a-f0-9]{64})"`))?.[1] ?? hash;
-        } catch (e) { console.warn(`[ivlyrics-sidecar] ${chunk} not readable, using built-in hash`, e); }
+        } catch (e) { console.warn(`[spotiflux] ${chunk} not readable, using built-in hash`, e); }
       }
       def = { name, operation: "query", sha256Hash: hash, value: null };
     }
@@ -630,19 +698,19 @@
       try {
         const res = await Spicetify.GraphQL.Request(await gqlDef(name), vars);
         const items = res?.data?.searchV2?.tracksV2?.items;
-        if (!items) { console.warn(`[ivlyrics-sidecar] ${name}: no tracks`, res?.errors ?? res); continue; }
+        if (!items) { console.warn(`[spotiflux] ${name}: no tracks`, res?.errors ?? res); continue; }
         return items.map((it) => {
           const d = it?.item?.data ?? it?.data ?? {};
           return toView(d.uri, d.name, (d.artists?.items ?? []).map((a) => a.profile?.name).join(", "));
         }).filter((t) => t.uri);
-      } catch (e) { console.warn(`[ivlyrics-sidecar] ${name} failed`, e); }
+      } catch (e) { console.warn(`[spotiflux] ${name} failed`, e); }
     }
     try {
       const res = await Spicetify.CosmosAsync.get(
         `https://api.spotify.com/v1/search?type=track&limit=30&q=${encodeURIComponent(q)}`);
       return (res?.tracks?.items ?? []).map((t) => toView(t.uri, t.name, t.artists.map((a) => a.name).join(", ")));
     } catch (e) {
-      console.warn("[ivlyrics-sidecar] web api search failed", e);
+      console.warn("[spotiflux] web api search failed", e);
       return [];
     }
   }
@@ -786,9 +854,11 @@
       else await Spicetify.addToQueue([{ uri: v.uri }]);
       rowEl?.classList.add("queued");
       if (document.body.classList.contains("ivnext-open")) setTimeout(renderNext, 300);
+      return true;
     } catch (e) {
-      console.warn("[ivlyrics-sidecar] queue next failed", e);
+      console.warn("[spotiflux] queue next failed", e);
       Spicetify.showNotification?.(`Couldn't queue ${v.name}`, true);
+      return false;
     }
   }
 
@@ -805,7 +875,7 @@
       Spicetify.showNotification?.("Queue cleared");
       if (document.body.classList.contains("ivnext-open")) setTimeout(renderNext, 300);
     } catch (e) {
-      console.warn("[ivlyrics-sidecar] clear queue failed", e);
+      console.warn("[spotiflux] clear queue failed", e);
       Spicetify.showNotification?.("Couldn't clear the queue", true);
     }
   }
@@ -960,7 +1030,7 @@
     if (v.ctxUri) {
       // Track from a playlist: play that playlist from this track.
       try { await Spicetify.Platform.PlayerAPI.play({ uri: v.ctxUri }, {}, { skipTo: { uid: v.uid, uri: v.uri } }); }
-      catch (e) { console.warn("[ivlyrics-sidecar] context play failed", e); Spicetify.Player.playUri(v.uri); }
+      catch (e) { console.warn("[spotiflux] context play failed", e); Spicetify.Player.playUri(v.uri); }
       return;
     }
     try { await Spicetify.Player.playUri(v.uri); }
@@ -1051,7 +1121,7 @@
       }
       const client = Spicetify.Platform.ControlMessageAPI?._updateUiClient;
       if (typeof client?.setButtonsVisibility === "function") return (v) => client.setButtonsVisibility({ showButtons: v });
-    } catch (e) { console.warn("[ivlyrics-sidecar] window buttons API not found", e); }
+    } catch (e) { console.warn("[spotiflux] window buttons API not found", e); }
     return null;
   })();
   if (setWinButtons) {
@@ -1084,7 +1154,7 @@
 
   // ---------- right pane: tracks around the current one ----------
   const nextPanel = $("ivnext-panel"), nextList = $("ivnext-list"), crumb = $("ivnext-crumb"), hint = $("ivnext-hint");
-  const next = { views: [], timer: null, bandTimer: null, stack: [], qActive: -1, rendered: null };
+  const next = { views: [], timer: null, stack: [], qActive: -1, rendered: null };
   // Top of the nest (null = queue). Assigning replaces the whole path.
   Object.defineProperty(next, "view", {
     get() { return this.stack.at(-1) ?? null; },
@@ -1100,7 +1170,8 @@
     const title = md.title ?? t?.name ?? uri;
     const artists = md.artist_name ?? (t?.artists ?? []).map((a) => a.name).join(", ");
     return {
-      type: "track", section, uri, uid: ct.uid ?? t?.uid,
+      type: "track", section, uri, uid: ct.uid ?? t?.uid, title,
+      artists: md.artist_name ? [md.artist_name] : (t?.artists ?? []).map((a) => a.name),
       name: [artists, title].filter(Boolean).join(" – "),
       sub: "",
       img: imgUrl(md.image_url ?? md.image_small_url ?? t?.album?.images?.[0]?.url ?? t?.images?.[0]?.url),
@@ -1177,7 +1248,7 @@
     if (document.body.classList.contains("ivnext-open")) renderNext(); else setNext(true);
     setFocus("right");
     try { Object.assign(node, entry.kind === "artist" ? await loadArtist(entry.uri) : await loadAlbum(entry.uri)); }
-    catch (e) { console.warn(`[ivlyrics-sidecar] ${entry.kind} load failed`, e); node.error = true; }
+    catch (e) { console.warn(`[spotiflux] ${entry.kind} load failed`, e); node.error = true; }
     node.loading = false;
     if (next.stack.includes(node)) renderNext();
   }
@@ -1280,57 +1351,111 @@
       else if (ctx) await P.play({ uri: ctx }, {}, { skipTo: { uid: v.uid, uri: v.uri } });
       else throw new Error("no context");
     } catch (e) {
-      console.warn("[ivlyrics-sidecar] skip failed, playing track alone", e);
+      console.warn("[spotiflux] skip failed, playing track alone", e);
       Spicetify.Player.playUri(v.uri);
     }
   }
 
   // ---------- layout ----------
   // Library | player | queue. Both panes are the same width (27.5% of the
-  // window, 200-380px) so the centred player never sits under one. The player
-  // block (cover to controls) is moved with `translate`, leaving room above it
-  // for the lyric box. The queue list fills the band from 33% to 66% of the
-  // height, or the player's full height if that's taller.
-  const leftPanel = () => document.querySelector(`${FS_SELECTOR} .lyrics-fullscreen-left-panel`);
+  // window, 200-380px) so the centred player never sits under one. The cover
+  // fits the space between the panes; the player block's top sits at 28% of
+  // the height, leaving room above it for the lyric box. The queue list fills
+  // the band from 33% to 66% of the height, or the player's full height if
+  // that's taller. Runs on enter, resize and whenever the block's height
+  // changes (ResizeObserver: long titles wrap).
   const paneWidth = () => Math.round(Math.min(380, Math.max(200, window.innerWidth * 0.275)));
-  function readShift(lp) {
-    const [x, y] = (lp.style.translate || "0px 0px").split(" ").map((v) => parseFloat(v) || 0);
-    return { x, y };
-  }
+  const player = $("sfx-player");
 
   function layout() {
     const css = document.documentElement.style;
     const W = window.innerWidth, H = window.innerHeight, pw = paneWidth();
     css.setProperty("--ivlib-w", `${pw}px`);
     css.setProperty("--ivnext-w", `${pw}px`);
-    let top = H * 0.33, bottom = H * 0.66, playerTop = H * 0.3;
-    const lp = leftPanel();
-    if (lp) {
-      const rects = [...lp.querySelectorAll(".lyrics-fullscreen-left-content, .fullscreen-left-controls")]
-        .map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0);
-      if (rects.length) {
-        const cur = readShift(lp);
-        const cTop = Math.min(...rects.map((r) => r.top)) - cur.y;
-        const cBot = Math.max(...rects.map((r) => r.bottom)) - cur.y;
-        const cMid = (Math.min(...rects.map((r) => r.left)) + Math.max(...rects.map((r) => r.right))) / 2 - cur.x;
-        const h = cBot - cTop;
-        // Top at 28% (room for the lyric box) unless that pushes it off-screen.
-        let pTop = Math.max(H * 0.28, (H - h) / 2);
-        if (pTop + h > H - 12) pTop = Math.max(8, H - 12 - h);
-        const x = Math.round(W / 2 - cMid), y = Math.round(pTop - cTop);
-        if (Math.abs(x - cur.x) > 1 || Math.abs(y - cur.y) > 1) lp.style.translate = `${x}px ${y}px`;
-        top = Math.min(top, pTop);
-        bottom = Math.max(bottom, pTop + h);
-        playerTop = pTop;
-      }
-    }
-    css.setProperty("--ivnext-top", `${Math.max(8, Math.round(top))}px`);
-    css.setProperty("--ivnext-bottom", `${Math.max(8, Math.round(H - bottom))}px`);
-    css.setProperty("--ivlyr-w", `${Math.max(160, Math.min(440, W - 2 * pw - 48))}px`);
+    const mid = Math.max(160, Math.min(440, W - 2 * pw - 48));
+    css.setProperty("--sfx-cover", `${Math.round(Math.max(140, Math.min(340, H * 0.36, mid * 0.85)))}px`);
+    const h = player.offsetHeight;
+    // Top at 28% (room for the lyric box) unless that pushes it off-screen.
+    let pTop = Math.max(H * 0.28, (H - h) / 2);
+    if (pTop + h > H - 12) pTop = Math.max(8, H - 12 - h);
+    css.setProperty("--sfx-top", `${Math.round(pTop)}px`);
+    css.setProperty("--ivnext-top", `${Math.max(8, Math.round(Math.min(H * 0.33, pTop)))}px`);
+    css.setProperty("--ivnext-bottom", `${Math.max(8, Math.round(H - Math.max(H * 0.66, pTop + h)))}px`);
+    css.setProperty("--ivlyr-w", `${mid}px`);
     // The lyric box runs from under the arrow guide (top row) to just above the cover.
-    css.setProperty("--ivlyr-bottom", `${Math.round(H - playerTop + 24)}px`);
+    css.setProperty("--ivlyr-bottom", `${Math.round(H - pTop + 24)}px`);
     placeGear();
   }
+  new ResizeObserver(() => { if (document.body.classList.contains("ivlib-fs")) layout(); }).observe(player);
+
+  // ---------- the deck: cover, title, progress, buttons, volume ----------
+  // Track fields, whichever shape Spicetify.Player.data.item has. Also used
+  // by the bridge's state message.
+  function trackInfo(item = Spicetify.Player.data?.item) {
+    const md = item?.metadata ?? {};
+    return {
+      uri: item?.uri ?? "", title: item?.name ?? md.title ?? "",
+      artists: item?.artists?.length ? item.artists.map((a) => a.name) : [md.artist_name].filter(Boolean),
+      artist_uri: item?.artists?.[0]?.uri ?? md.artist_uri ?? "",
+      album: item?.album?.name ?? md.album_title ?? "", album_uri: item?.album?.uri ?? md.album_uri ?? "",
+      duration_ms: Number(item?.duration?.milliseconds ?? md.duration) || 0,
+      cover_url: imgUrl(md.image_xlarge_url ?? md.image_large_url ?? md.image_url ?? item?.album?.images?.[0]?.url) ?? "",
+    };
+  }
+  const fmtTime = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+  const deck = { uri: null, key: "", bar: $("sfx-bar"), vol: $("sfx-vol"), cover: $("sfx-cover") };
+
+  function renderDeck() {
+    const t = trackInfo();
+    deck.uri = t.uri;
+    $("sfx-title").textContent = t.title;
+    $("sfx-artist").textContent = t.artists.join(", ");
+    $("sfx-album").textContent = t.album;
+    if (t.cover_url) deck.cover.src = t.cover_url; else deck.cover.removeAttribute("src");
+    $("sfx-bg").style.backgroundImage = t.cover_url ? `url("${t.cover_url}")` : "";
+  }
+
+  // Every 250 ms while the deck is open: progress, button states, volume.
+  function tickDeck() {
+    const P = Spicetify.Player;
+    if ((P.data?.item?.uri ?? "") !== deck.uri) renderDeck();
+    const pos = P.getProgress?.() ?? 0, dur = P.getDuration?.() ?? 0;
+    $("sfx-pos").textContent = fmtTime(pos);
+    $("sfx-dur").textContent = fmtTime(dur);
+    deck.bar.style.setProperty("--sfx-p", `${dur ? Math.min(100, (100 * pos) / dur).toFixed(2) : 0}%`);
+    const playing = !!P.isPlaying?.(), rep = P.getRepeat?.() ?? 0, vol = Math.round((P.getVolume?.() ?? 1) * 100);
+    const key = `${playing}|${!!P.getShuffle?.()}|${rep}|${vol}`;
+    if (key === deck.key) return;
+    deck.key = key;
+    $("sfx-play").innerHTML = icon(playing ? ICON.pause : ICON.play);
+    $("sfx-shuffle").classList.toggle("on", !!P.getShuffle?.());
+    $("sfx-repeat").classList.toggle("on", rep > 0);
+    $("sfx-repeat").toggleAttribute("data-one", rep === 2);
+    if (document.activeElement !== deck.vol) deck.vol.value = vol;
+    $("sfx-volv").textContent = vol;
+  }
+
+  const playerDo = (fn) => () => { try { fn(Spicetify.Player); } catch (e) { console.warn("[spotiflux] player call failed", e); } };
+  $("sfx-play").addEventListener("click", playerDo((P) => P.togglePlay()));
+  $("sfx-prev").addEventListener("click", playerDo((P) => P.back()));
+  $("sfx-next").addEventListener("click", playerDo((P) => P.next()));
+  $("sfx-shuffle").addEventListener("click", playerDo((P) => P.toggleShuffle()));
+  $("sfx-repeat").addEventListener("click", playerDo((P) => P.toggleRepeat()));
+  deck.vol.addEventListener("input", playerDo((P) => P.setVolume(deck.vol.value / 100)));
+  // Hand the keys back (Space, arrows) once the slider is let go.
+  deck.vol.addEventListener("change", () => deck.vol.blur());
+  deck.bar.addEventListener("click", (e) => {
+    const r = deck.bar.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    playerDo((P) => P.seek(Math.round(frac * P.getDuration())))();
+  });
+  // Title or album opens the album, artist opens the artist, both in the
+  // queue pane; right-click on the cover opens our menu.
+  const openAlbumHere = () => showAlbum(trackInfo().album_uri);
+  $("sfx-title").addEventListener("click", openAlbumHere);
+  $("sfx-album").addEventListener("click", openAlbumHere);
+  $("sfx-artist").addEventListener("click", () => { const t = trackInfo(); showArtist(t.artist_uri, t.artists[0]); });
+  deck.cover.addEventListener("contextmenu", (e) => { e.preventDefault(); openCtx(e.clientX, e.clientY); });
 
   // ---------- queue pane open / close ----------
   // Folds like a book cover (CSS). The queue re-renders every 4s while open
@@ -1382,6 +1507,8 @@
     const mod = e.altKey || e.ctrlKey || e.metaKey;
     const consume = () => { e.preventDefault(); e.stopImmediatePropagation(); };
     const field = e.target?.matches?.("input, textarea, [contenteditable='true']") ? e.target : null;
+    // The settings dialog owns the keyboard while it's open; Esc closes it.
+    if (settings.open) { if (e.key === "Escape") { consume(); closeSettings(); } return; }
 
     // 1. Space: play/pause anywhere in Spotify, except mid-text in a text box.
     if (e.code === "Space" && !mod && !(field && (field.value ?? field.textContent ?? "").length)) {
@@ -1403,9 +1530,8 @@
       return;
     }
     if (!fs) return;
-    // F12 (or whatever ivLyrics' fullscreen key is) never leaves; Ctrl+Backspace does.
-    const fsKey = (localStorage.getItem("ivLyrics:visual:fullscreen-key") || "f12").toLowerCase();
-    if (e.key === "F12" || (!field && (e.key ?? "").toLowerCase() === fsKey)) { consume(); return; }
+    // F12 does nothing in the deck (it used to leave fullscreen); Ctrl+Backspace leaves.
+    if (e.key === "F12") { consume(); return; }
     // Ctrl+Shift commands: add to playlist, pick playlist, help, lyric box toggles.
     if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && CMDS[e.code]) {
       consume();
@@ -1467,7 +1593,7 @@
       snapKeyAt = Date.now();
       snapTo("left");
     });
-  } catch (e) { console.warn("[ivlyrics-sidecar] select_all hook unavailable, Ctrl+A snaps on release", e); }
+  } catch (e) { console.warn("[spotiflux] select_all hook unavailable, Ctrl+A snaps on release", e); }
   window.addEventListener("keydown", (e) => { if (e.key === "Control") ctrlHeld = true; else if (e.key === "Shift") shiftHeld = true; }, true);
   window.addEventListener("pointerdown", () => { pointerHeld = true; }, true);
   window.addEventListener("pointerup", () => { pointerHeld = false; }, true);
@@ -1595,13 +1721,15 @@
 
   async function addToPlaylist(pl, trackUri) {
     closeCtx();
-    if (!trackUri) { Spicetify.showNotification?.("Nothing is playing"); return; }
+    if (!trackUri) { Spicetify.showNotification?.("Nothing is playing"); return false; }
     try {
       await Spicetify.Platform.PlaylistAPI.add(pl.uri, [trackUri], { after: "end" });
       Spicetify.showNotification?.(`Added to ${pl.name}`);
+      return true;
     } catch (e) {
-      console.error("[ivlyrics-sidecar] add to playlist failed", e);
+      console.error("[spotiflux] add to playlist failed", e);
       Spicetify.showNotification?.(`Couldn't add to ${pl.name}`, true);
+      return false;
     }
   }
 
@@ -1729,65 +1857,7 @@
     const item = e.target.closest(".ivlib-ctx-item");
     if (item) ctx.views[+item.dataset.i]?.act();
   });
-  const onAlbumCover = (e) => document.body.classList.contains("ivlib-fs")
-    && e.target?.closest?.(`${FS_SELECTOR} .lyrics-fullscreen-album-container`);
-  // Capture on window runs before ivLyrics' React handlers (AI research / hold).
-  window.addEventListener("contextmenu", (e) => {
-    if (!onAlbumCover(e)) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    openCtx(e.clientX, e.clientY);
-  }, true);
-  // Album name / song title under the cover: ivLyrics links them to Spotify's
-  // album/track page (leaving fullscreen). Open the album in the queue pane instead.
-  const ALBUM_LINKS = [
-    ".lyrics-fullscreen-album-name", ".fullscreen-tv-album-name", ".portrait-track-album-name",
-    ".lyrics-fullscreen-title-container", ".fullscreen-tv-title-container",
-    ".portrait-track-title", ".portrait-track-title-sub",
-  ].map((c) => `${FS_SELECTOR} ${c}.fullscreen-navigation-link`).join(", ");
-  const openAlbumFromLink = (e) => {
-    if (!e.target?.closest?.(ALBUM_LINKS)) return;
-    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    const item = Spicetify.Player.data?.item;
-    showAlbum(item?.album?.uri ?? item?.metadata?.album_uri);
-  };
-  window.addEventListener("click", openAlbumFromLink, true);
-  window.addEventListener("keydown", openAlbumFromLink, true);
 
-  // Artist name: same idea, opens the artist's releases in the right pane.
-  const ARTIST_LINKS = [
-    ".lyrics-fullscreen-artist-container", ".fullscreen-tv-artist-container",
-    ".portrait-track-artist", ".portrait-track-artist-sub",
-  ].map((c) => `${FS_SELECTOR} ${c}.fullscreen-navigation-link`).join(", ");
-  const openArtistFromLink = (e) => {
-    if (!e.target?.closest?.(ARTIST_LINKS)) return;
-    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    const item = Spicetify.Player.data?.item;
-    showArtist(item?.artists?.[0]?.uri ?? item?.metadata?.artist_uri, item?.artists?.[0]?.name ?? item?.metadata?.artist_name);
-  };
-  window.addEventListener("click", openArtistFromLink, true);
-  window.addEventListener("keydown", openArtistFromLink, true);
-
-
-  // Layout is re-measured every 300ms in fullscreen: controls auto-hide and
-  // title length change the player's height.
-  function startBand(on) {
-    clearInterval(next.bandTimer);
-    if (on) { layout(); next.bandTimer = setInterval(layout, 300); }
-  }
-
-  // Marks songs without lyrics (hides the sync gear).
-  function checkLyricsState() {
-    if (!document.body.classList.contains("ivlib-fs")) return;
-    const fs = document.querySelector(FS_SELECTOR);
-    const none = !!fs?.querySelector(".lyrics-lyricsContainer-LyricsUnavailablePage") && !fs.classList.contains("fullscreen-lyrics-loading");
-    document.body.classList.toggle("ivlib-nolyrics", none);
-  }
-  setInterval(checkLyricsState, 500);
 
   // Queue list: a click selects, Enter or a double-click plays / opens.
   const rowIndex = (e) => { const row = e.target.closest(".ivlib-row"); return row ? +row.dataset.i : -1; };
@@ -1809,14 +1879,22 @@
   // ---------- lyrics sync offset: gear + dialog ----------
   // A faint gear right of the lyric box shows while the pointer is near the
   // box. It opens a dialog that nudges this track's lyrics earlier (+) or
-  // later (-) through ivLyrics' own per-track offset.
+  // later (-). Offsets live in localStorage ivsync:offsets, { uri: ms }.
   const SYNC_STEPS = [10, 50, 100, 250, 500, 1000];
-  const SYNC_LIMIT = 10000; // ivLyrics clamps to +-10s
+  const SYNC_LIMIT = 10000; // +-10 s
   const sync = {
     gear: $("ivsync-gear"), dlg: $("ivsync-dlg"), open: false, offset: 0, uri: null,
     step: SYNC_STEPS.includes(+localStorage.getItem("ivsync:step")) ? +localStorage.getItem("ivsync:step") : 100,
   };
-  const syncApi = () => window.Utils;
+  const STORE_OFFSETS = "ivsync:offsets";
+  const readOffsets = () => { try { return JSON.parse(localStorage.getItem(STORE_OFFSETS)) ?? {}; } catch { return {}; } };
+  const offsets = readOffsets();
+  const offsetOf = (uri) => Math.max(-SYNC_LIMIT, Math.min(SYNC_LIMIT, Number(offsets[uri]) || 0));
+  function setOffset(uri, ms) {
+    if (ms) offsets[uri] = ms; else delete offsets[uri];
+    try { localStorage.setItem(STORE_OFFSETS, JSON.stringify(offsets)); }
+    catch (e) { console.warn("[spotiflux] sync offset write failed", e); }
+  }
   const fmtOffset = (ms) => `${ms > 0 ? "+" : ms < 0 ? "−" : ""}${Math.abs(ms)} ms`;
 
   // Gear: just right of the lyric box, at its vertical middle; dialog below it.
@@ -1852,9 +1930,9 @@
       <div class="ivsync-foot"><button class="ivsync-reset" data-act="reset">reset</button><span>step ${sync.step} ms</span></div>`;
   }
 
-  async function openSync() {
+  function openSync() {
     sync.uri = Spicetify.Player.data?.item?.uri ?? null;
-    sync.offset = sync.uri ? Number(await syncApi()?.getTrackSyncOffset?.(sync.uri)) || 0 : 0;
+    sync.offset = sync.uri ? offsetOf(sync.uri) : 0;
     sync.open = true;
     document.body.classList.add("ivsync-open");
     placeGear();
@@ -1866,15 +1944,14 @@
     document.body.classList.remove("ivsync-open");
   }
 
-  async function nudgeSync(delta) {
+  function nudgeSync(delta) {
     if (!sync.uri) return;
     sync.offset = Math.max(-SYNC_LIMIT, Math.min(SYNC_LIMIT, sync.offset + delta));
     renderSync();
     // Direction flash: the readout kicks the way the lyrics moved.
     const ro = sync.dlg.querySelector(".ivsync-readout");
     ro.classList.add(delta > 0 ? "kick-earlier" : "kick-later");
-    try { await syncApi()?.setTrackSyncOffset?.(sync.uri, sync.offset); }
-    catch (e) { console.warn("[ivlyrics-sidecar] sync offset write failed", e); }
+    setOffset(sync.uri, sync.offset);
   }
 
   sync.gear.addEventListener("click", () => (sync.open ? closeSync() : openSync()));
@@ -1914,20 +1991,174 @@
     return true;
   }
 
-  // ---------- lyric box: the current line above the player ----------
-  // Mirrors ivLyrics' active line (its own column stays hidden). Per song,
-  // decides once whether the lyrics are English: then only the original shows;
-  // otherwise a tiny original plus the translation.
-  const lyr = { el: $("ivlyr-box"), key: "", uri: null, english: null };
-  const LINE_SKIP = ".lyrics-lyricsContainer-LyricsLine-translation, .lyrics-lyricsContainer-LyricsLine-phonetic,"
-    + " .lyrics-lyricsContainer-LyricsLine-culturalNote, rt";
-  // Also drops ivLyrics' cultural-note markers ("word[1]").
-  const flat = (t) => (t ?? "").replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
-  function lineText(line) {
-    const c = line.cloneNode(true);
-    c.querySelectorAll(LINE_SKIP).forEach((n) => n.remove());
-    return flat(c.textContent);
+  // ---------- lyrics: fetch, line clock, translation ----------
+  // Spotify's own lyrics first (color-lyrics, through the client's session),
+  // else LRCLIB (one request at a time). Found lyrics are cached per track
+  // (memory + a small localStorage LRU). A 250 ms clock finds the current line
+  // from the player position plus this song's sync offset. For songs that
+  // aren't English, Gemini (the user's key) adds translation + pronunciation.
+  const LRU_MAX = 40;
+  function lru(store, max) {
+    const mem = new Map();
+    try { for (const [k, v] of JSON.parse(localStorage.getItem(store)) ?? []) mem.set(k, v); } catch {}
+    return {
+      get: (k) => mem.get(k),
+      set(k, v) {
+        mem.delete(k);
+        mem.set(k, v);
+        while (mem.size > max) mem.delete(mem.keys().next().value);
+        try { localStorage.setItem(store, JSON.stringify([...mem])); } catch (e) { console.warn("[spotiflux] cache write failed", e); }
+      },
+    };
   }
+  const lyrCache = lru("spotiflux:lyrics-cache", LRU_MAX), trCache = lru("spotiflux:tr-cache", LRU_MAX);
+  const noLyrics = new Set(); // this session only: LRCLIB may get them later
+  const lyrics = { uri: null, source: "none", synced: false, language: "", lines: [], loading: "", idx: -1, tr: null, english: null };
+  const cleanLine = (t) => { const s = String(t ?? "").replace(/\s+/g, " ").trim(); return s === "♪" ? "" : s; };
+
+  async function fromSpotify(uri) {
+    const body = await Spicetify.CosmosAsync.get(
+      `https://spclient.wg.spotify.com/color-lyrics/v2/track/${uri.split(":")[2]}?format=json&vocalRemoval=false&market=from_token`);
+    const l = body?.lyrics;
+    if (!l?.lines?.length) return null;
+    const synced = l.syncType === "LINE_SYNCED" || l.syncType === "SYLLABLE_SYNCED";
+    return {
+      source: "spotify", synced, language: l.language && l.language !== "und" ? l.language : "",
+      lines: l.lines.map((x) => ({ start_ms: synced ? Number(x.startTimeMs) || 0 : 0, text: cleanLine(x.words) })),
+    };
+  }
+
+  // "[01:02.34]text" lines, several stamps per line allowed.
+  function parseLrc(lrc) {
+    const out = [], stamp = /\[(\d+):(\d+(?:\.\d+)?)\]/g;
+    for (const raw of String(lrc).split(/\r?\n/)) {
+      const text = cleanLine(raw.replace(stamp, ""));
+      for (const m of raw.matchAll(stamp)) out.push({ start_ms: Math.round((+m[1] * 60 + +m[2]) * 1000), text });
+    }
+    return out.sort((a, b) => a.start_ms - b.start_ms);
+  }
+
+  // LRCLIB asks for one request at a time and a client name (browsers can't
+  // set User-Agent, so its Lrclib-Client header).
+  let lrcChain = Promise.resolve();
+  const LRC_HEADERS = { "Lrclib-Client": `spotiflux ${VERSION} (https://github.com/gigacook/spotiflux)` };
+  const lrcGet = (path) => (lrcChain = lrcChain.catch(() => {}).then(async () => {
+    const r = await fetch(`https://lrclib.net/api/${path}`, { headers: LRC_HEADERS });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(`lrclib ${r.status}`);
+    return r.json();
+  }));
+
+  async function fromLrclib(t) {
+    const q = (o) => new URLSearchParams(o).toString();
+    const artist = t.artists[0] ?? "", secs = Math.round(t.duration_ms / 1000);
+    let hit = await lrcGet(`get?${q({ track_name: t.title, artist_name: artist, album_name: t.album, duration: secs })}`);
+    if (!hit?.syncedLyrics && !hit?.plainLyrics) {
+      const found = await lrcGet(`search?${q({ track_name: t.title, artist_name: artist })}`);
+      const all = Array.isArray(found) ? found : [];
+      hit = all.find((h) => h.syncedLyrics && Math.abs(h.duration - secs) <= 3) ?? all.find((h) => h.syncedLyrics) ?? all.find((h) => h.plainLyrics);
+    }
+    if (hit?.syncedLyrics) return { source: "lrclib", synced: true, language: "", lines: parseLrc(hit.syncedLyrics) };
+    if (hit?.plainLyrics) return { source: "lrclib", synced: false, language: "", lines: hit.plainLyrics.split(/\r?\n/).map((x) => ({ start_ms: 0, text: cleanLine(x) })) };
+    return null;
+  }
+
+  async function loadLyrics() {
+    const t = trackInfo(), uri = t.uri;
+    Object.assign(lyrics, { uri, source: "none", synced: false, language: "", lines: [], loading: "", idx: -1, tr: null, english: null });
+    let res = lyrCache.get(uri) ?? (noLyrics.has(uri) ? null : undefined);
+    if (res === undefined && /^spotify:(track|local):/.test(uri)) {
+      res = null;
+      if (uri.startsWith("spotify:track:")) {
+        lyrics.loading = "spotify";
+        lyricsChanged();
+        try { res = await fromSpotify(uri); } catch {} // 404 = Spotify has none
+      }
+      if (!res && t.title && lyrics.uri === uri) {
+        lyrics.loading = "lrclib";
+        lyricsChanged();
+        try { res = await fromLrclib(t); } catch (e) { console.warn("[spotiflux] lrclib failed", e); }
+      }
+      if (res?.lines.length) lyrCache.set(uri, res); else { res = null; noLyrics.add(uri); }
+    }
+    if (lyrics.uri !== uri) return; // the song changed meanwhile
+    Object.assign(lyrics, res ?? {}, { loading: "" });
+    lyrics.english = lyrics.language ? lyrics.language.startsWith("en")
+      : lyrics.lines.length ? looksEnglish(lyrics.lines.slice(0, 60).map((l) => l.text).join(" ")) : null;
+    lyricsChanged();
+    translate();
+  }
+
+  // New lyrics, translations or loading state: box, gear, bridge.
+  function lyricsChanged() {
+    document.body.classList.toggle("ivlib-nolyrics", !lyrics.loading && !(lyrics.synced && lyrics.lines.length));
+    lyrics.idx = -2; // forces a fresh line message
+    lyr.key = "";
+    if (!lyrics.loading) bridgeSend(lyricsMsg());
+    lyricClock();
+  }
+
+  // Binary search: the last line that started at or before the position.
+  function lyricClock() {
+    let idx = -1;
+    if (lyrics.synced) {
+      const pos = (Spicetify.Player.getProgress?.() ?? 0) + offsetOf(lyrics.uri);
+      let lo = 0, hi = lyrics.lines.length - 1;
+      while (lo <= hi) {
+        const m = (lo + hi) >> 1;
+        if (lyrics.lines[m].start_ms <= pos) { idx = m; lo = m + 1; } else hi = m - 1;
+      }
+    }
+    if (idx !== lyrics.idx) {
+      lyrics.idx = idx;
+      if (!lyrics.loading) bridgeSend({ type: "line", uri: lyrics.uri, index: idx, start_ms: lyrics.lines[idx]?.start_ms ?? 0 });
+    }
+    updateLyricBox();
+  }
+
+  // One Gemini call per song with all lines; answer [{t, p}] per line.
+  async function gemini(texts, lang, key) {
+    const prompt = `Translate these song lyric lines into the language with code "${lang}". For each line also give its pronunciation in Latin letters if the line is not written in Latin script, otherwise an empty string. Keep empty lines empty. Answer with only a JSON array of exactly ${texts.length} objects {"t": translation, "p": pronunciation}, one per line, in the same order.\n\n${JSON.stringify(texts)}`;
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model())}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key }, // a header, so the key never sits in a URL
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature: 0.2 } }),
+    });
+    const body = await r.json().catch(() => null);
+    if (!r.ok) {
+      console.warn("[spotiflux] Gemini error", r.status, body?.error?.message ?? "");
+      throw new Error(`Gemini ${r.status}`);
+    }
+    let arr = null;
+    try { arr = JSON.parse((body?.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("")); } catch {}
+    if (!Array.isArray(arr)) throw new Error("Gemini reply unreadable");
+    return texts.map((_, i) => ({ t: String(arr[i]?.t ?? "").trim(), p: String(arr[i]?.p ?? "").trim() }));
+  }
+
+  async function translate() {
+    const { uri, lines } = lyrics, key = cfg.key(), lang = cfg.lang();
+    if (!key || lyrics.english !== false || !lines.some((l) => l.text)) return;
+    let tr = trCache.get(`${uri}|${lang}`);
+    if (!tr) {
+      try {
+        tr = await gemini(lines.map((l) => l.text), lang, key);
+        trCache.set(`${uri}|${lang}`, tr);
+      } catch (e) {
+        console.warn(`[spotiflux] translation failed: ${e.message}`);
+        if (lyrics.uri === uri) flashReadout(`translation failed: ${e.message}`, 3000);
+        return;
+      }
+    }
+    if (lyrics.uri !== uri || lyrics.lines !== lines) return;
+    lyrics.tr = tr;
+    lyricsChanged();
+  }
+
+  // ---------- lyric box: the current line above the player ----------
+  // Per song, decides once whether the lyrics are English (Spotify's language
+  // tag, else looksEnglish): then only the original shows; otherwise a tiny
+  // original plus the translation.
+  const lyr = { el: $("ivlyr-box"), key: "" };
   const EN_WORDS = /\b(the|you|i|i'm|me|my|and|to|in|it|is|of|on|your|we|be|so|not|love|no|all|just|that|what|never|can|don't|oh|this|with|for|like|know|it's|got|get|was|are|now|baby|yeah|when|she|he|they|our|up|down|out|go)\b/gi;
   function looksEnglish(text) {
     const letters = text.replace(/[^\p{L}]/gu, "");
@@ -1938,29 +2169,13 @@
   }
   function updateLyricBox() {
     if (!document.body.classList.contains("ivlib-fs")) return;
-    const fs = document.querySelector(FS_SELECTOR);
-    const uri = Spicetify.Player.data?.item?.uri;
-    if (lyr.uri !== uri || lyr.english === null) {
-      const lines = [...(fs?.querySelectorAll(".lyrics-lyricsContainer-LyricsLine:not(.lyrics-lyricsContainer-LyricsLine-paddingLine)") ?? [])]
-        .slice(0, 60).map(lineText).filter(Boolean);
-      lyr.uri = uri;
-      lyr.english = lines.length ? looksEnglish(lines.join(" ")) : null;
-    }
-    // The scroll anchor is the true current line. Without one, the last
-    // highlighted line: karaoke rows can stay "active" long after they end,
-    // so the first match in the page would freeze on an old line.
-    const active = fs?.querySelector(".lyrics-lyricsContainer-LyricsLine-scrollCurrent")
-      ?? [...(fs?.querySelectorAll(".lyrics-lyricsContainer-LyricsLine-active:not(.lyrics-lyricsContainer-LyricsLine-paddingLine)") ?? [])].pop();
-    const orig = active ? lineText(active) : "";
-    const tr = lyrOpt.tr ? flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-translation")?.textContent) : "";
-    // Pronunciation only exists when ivLyrics makes one (its first-line setting).
-    const ph = lyrOpt.ph ? flat(active?.querySelector(".lyrics-lyricsContainer-LyricsLine-phonetic")?.textContent) : "";
-    const showTr = !!tr && lyr.english !== true;
+    const i = lyrics.idx, extra = lyrics.tr?.[i] ?? {};
+    const orig = lyrics.lines[i]?.text ?? "";
+    const tr = lyrOpt.tr && orig ? extra.t ?? "" : "";
+    const ph = lyrOpt.ph && orig ? extra.p ?? "" : "";
+    const showTr = !!tr && lyrics.english !== true;
     const dual = showTr || !!ph;
-    // ivLyrics' loading pill (hidden) -> a quiet "loading <provider>…" line.
-    const pill = !orig && [...(fs?.querySelectorAll(".lyrics-generation-status-stack .lyrics-translation-loading-indicator") ?? [])]
-      .find((el) => !/complete|done|success|hidden/i.test(el.dataset.phase ?? ""));
-    const loading = pill ? flat(pill.querySelector(".lyrics-generation-status-loading-label")?.textContent).toLowerCase() || "lyrics" : "";
+    const loading = lyrics.loading;
     const key = `${orig}\u0000${ph}\u0000${showTr ? tr : ""}\u0000${loading}`;
     if (key === lyr.key) return;
     lyr.key = key;
@@ -1971,10 +2186,9 @@
     void lyr.el.offsetWidth; // restart the fade-in
     lyr.el.classList.add("in");
   }
-  setInterval(updateLyricBox, 250);
 
   // Lyric box switches (remembered): the box itself, translation, pronunciation.
-  // They only change what the box shows, never ivLyrics' own settings.
+  // They only change what the box shows; translations are fetched either way.
   const LYR_OPTS = { on: ["ivlyr:on", "lyrics", true], tr: ["ivlyr:tr", "translation", true], ph: ["ivlyr:ph", "pronunciation", false] };
   const lyrOpt = Object.fromEntries(Object.entries(LYR_OPTS).map(([k, [store, , def]]) => {
     const v = localStorage.getItem(store);
@@ -1991,6 +2205,12 @@
     lyr.key = "";
     updateLyricBox();
     flashReadout(`${LYR_OPTS[k][1]} ${lyrOpt[k] ? "on" : "off"}`);
+  }
+  // Without a Gemini key there's nothing to show: say so on the first press.
+  let keyHinted = false;
+  function toggleTr() {
+    toggleLyr("tr");
+    if (!cfg.key() && !keyHinted) { keyHinted = true; flashReadout("translation needs a Gemini key (settings)", 3000); }
   }
   syncLyrUi();
   $("ivlyr-tog").addEventListener("click", () => toggleLyr("on"));
@@ -2009,7 +2229,7 @@
     ["ctrl+⇧+s", ["ctrl", "⇧", "s"], "Add the song to the pinned playlist (asks first)", "fullscreen", () => addHotkey(), "save"],
     ["ctrl+⇧+a", ["ctrl", "⇧", "a"], "Pick or change the pinned playlist", "fullscreen", () => openPicker(), "add to playlist choose"],
     ["ctrl+⇧+l", ["ctrl", "⇧", "l"], "Lyric box on / off", "fullscreen", () => toggleLyr("on"), "lyrics hide show"],
-    ["ctrl+⇧+t", ["ctrl", "⇧", "t"], "Translation on / off", "fullscreen", () => toggleLyr("tr"), "lyrics translate"],
+    ["ctrl+⇧+t", ["ctrl", "⇧", "t"], "Translation on / off", "fullscreen", () => toggleTr(), "lyrics translate gemini"],
     ["ctrl+⇧+p", ["ctrl", "⇧", "p"], "Pronunciation on / off", "fullscreen", () => toggleLyr("ph"), "lyrics romaji phonetic"],
     ["ctrl+⇧+h", ["ctrl", "⇧", "h"], "This help", "fullscreen", null, "keys shortcuts"],
     ["esc", ["esc"], "Close panes, dialogs and search: just the player", "fullscreen", () => resetView()],
@@ -2029,12 +2249,14 @@
     ["0", ["0"], "Reset the sync offset", "sync dialog", null, "timing"],
     ["f12", ["f12"], "Nothing: can't leave fullscreen by accident", "fullscreen"],
     ["right-click cover", [], "Show album, show artist, add to playlist", "player", null, "menu"],
+    ["profile menu", [], "spotiflux settings: Gemini key, bridge, start", "anywhere", () => openSettings(), "settings options gemini key translation language autostart"],
+    ["bridge", [], "Send Spotify to local apps (ws://127.0.0.1:47474), control off by default", "settings", () => openSettings(), "websocket gigaplay native app port allow control"],
     ["click title / artist", [], "Open the album or artist in the queue pane", "player"],
   ];
   // Ctrl+Shift + key, from onKey.
   const CMDS = {
     KeyS: () => addHotkey(), KeyA: () => pickHotkey(), KeyH: () => toggleHelp(),
-    KeyL: () => toggleLyr("on"), KeyT: () => toggleLyr("tr"), KeyP: () => toggleLyr("ph"),
+    KeyL: () => toggleLyr("on"), KeyT: () => toggleTr(), KeyP: () => toggleLyr("ph"),
   };
   const KB = [
     ["esc", "f12"],
@@ -2107,21 +2329,19 @@
   });
 
   // ---------- pointer: one dispatcher ----------
-  // Closes menus on outside clicks, keeps the cover's right-press away from
-  // ivLyrics' hold-to-research, and moves focus to where you click. A click on
-  // empty space in the middle also folds the queue away.
-  const OWN_UI = "button, a, input, select, [role=button], [role=link], [role=slider], .fullscreen-progress-bar,"
-    + " .lyrics-fullscreen-album-container, #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, .ivgrip, #ivhint-dot, #ivexit, #ivstate, #ivhelp";
+  // Closes menus on outside clicks and moves focus to where you click. A click
+  // on empty space in the deck also folds the queue away.
+  const OWN_UI = "button, a, input, select, [role=button], [role=link], [role=slider], .sfx-bar, .sfx-link, #sfx-cover,"
+    + " #ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #ivsync-gear, .ivgrip, #ivhint-dot, #ivexit, #ivstate, #ivhelp";
   window.addEventListener("pointerdown", (e) => {
     if (help.open && !e.target?.closest?.(".ivhelp-box, #ivhelp-tag")) closeHelp();
     if (ctx.state && !ctx.el.contains(e.target)) closeCtx();
     if (sync.open && !sync.dlg.contains(e.target) && !sync.gear.contains(e.target)) closeSync();
-    if (e.button === 2 && onAlbumCover(e)) { e.stopImmediatePropagation(); return; }
     if (e.button !== 0 || !document.body.classList.contains("ivlib-fs")) return;
     if (e.target?.closest?.("#ivlib-panel, #ivlib-tab, #ivnext-tab")) return;
     if (e.target?.closest?.("#ivlib-panel")) { setFocus("left"); return; }
     if (e.target?.closest?.("#ivnext-panel")) { setFocus("right"); return; }
-    if (e.target?.closest?.(OWN_UI) || !e.target?.closest?.(FS_SELECTOR)) return;
+    if (e.target?.closest?.(OWN_UI) || !e.target?.closest?.("#spotiflux-deck")) return;
     if (isOpen("right")) setNext(false);
     setFocus("mid");
   }, true);
@@ -2129,21 +2349,21 @@
   window.addEventListener("keydown", onKey, true);
 
   // ---------- volume ----------
-  // Wheel anywhere over the fullscreen except the panes (they scroll) changes
+  // Wheel anywhere over the deck except the panes (they scroll) changes
   // volume in steps of 2, snapped to even numbers: one wheel notch (100) is
   // five steps, 10 points. Trackpads accumulate.
   const vol = { acc: 0, timer: null, el: $("ivvol") };
-  function flashReadout(text) {
+  function flashReadout(text, ms = 700) {
     vol.el.textContent = text;
     vol.el.classList.add("on");
     clearTimeout(vol.timer);
-    vol.timer = setTimeout(() => vol.el.classList.remove("on"), 700);
+    vol.timer = setTimeout(() => vol.el.classList.remove("on"), ms);
   }
   function seekBy(ms) {
     try {
       if (ms < 0) Spicetify.Player.skipBack(-ms); else Spicetify.Player.skipForward(ms);
       flashReadout(ms < 0 ? `◀ ${-ms / 1000}s` : `${ms / 1000}s ▶`);
-    } catch (e) { console.warn("[ivlyrics-sidecar] seek failed", e); }
+    } catch (e) { console.warn("[spotiflux] seek failed", e); }
   }
   function stepVolume(d) {
     const cur = Math.round(((Spicetify.Player.getVolume?.() ?? 1) * 100) / 2) * 2;
@@ -2162,7 +2382,7 @@
     if (!document.body.classList.contains("ivlib-fs")) return;
     if (e.target?.closest?.("#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg")) return;
     e.preventDefault();
-    e.stopImmediatePropagation(); // also keeps ivLyrics' wheel font-size change away
+    e.stopImmediatePropagation();
     vol.acc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
     while (Math.abs(vol.acc) >= 20) {
       stepVolume(vol.acc < 0 ? 2 : -2);
@@ -2173,64 +2393,292 @@
   // Each Spotify start begins at full volume; after that Spotify keeps whatever you set.
   try { Spicetify.Player.setVolume(1); } catch {}
 
-  // ivLyrics' own fullscreen volume slider: switch it back on.
-  try {
-    if (window.CONFIG?.visual && window.CONFIG.visual["fullscreen-show-volume"] !== true) {
-      window.CONFIG.visual["fullscreen-show-volume"] = true;
-      localStorage.setItem("ivLyrics:visual:fullscreen-show-volume", "true");
-      window.dispatchEvent(new CustomEvent("ivLyrics", { detail: { type: "config", name: "fullscreen-show-volume", value: true } }));
-    }
-  } catch (e) { console.warn("[ivlyrics-sidecar] volume slider setting", e); }
+  // ---------- settings (profile menu: "spotiflux settings…") ----------
+  // Everything is stored in Spotify's localStorage only. The Gemini key is
+  // never logged and never sent anywhere but Google's API.
+  const STORE_AUTO = "ivlib:autostart";
+  const CFG = {
+    key: ["spotiflux:gemini-key", ""], model: ["spotiflux:gemini-model", "gemini-2.5-flash"], lang: ["spotiflux:lang", "en"],
+    bridge: ["spotiflux:bridge", "1"], port: ["spotiflux:port", "47474"], control: ["spotiflux:control", "0"],
+  };
+  const cfg = Object.fromEntries(Object.entries(CFG).map(([k, [store, def]]) => [k, () => localStorage.getItem(store) || def]));
+  const setCfg = (k, v) => localStorage.setItem(CFG[k][0], String(v));
+  const bridgePort = () => { const p = parseInt(cfg.port(), 10); return p >= 1024 && p <= 65535 ? p : 47474; };
+  const autoStart = () => localStorage.getItem(STORE_AUTO) !== "0";
 
-  // ---------- launch API (used by playlist-home) ----------
-  // Play a context, open ivLyrics fullscreen with the library panel, and come
-  // back to `from` when fullscreen is exited.
+  const setEl = document.createElement("div");
+  setEl.id = "sfx-settings";
+  setEl.innerHTML = `<div class="sfx-set-box" role="dialog" aria-label="spotiflux settings">
+    <h3>Translation</h3>
+    <div class="sfx-set-row"><label for="sfx-key">Gemini key</label><input id="sfx-key" type="password" autocomplete="off" spellcheck="false" placeholder="paste your API key">
+      <button class="ivlib-btn" id="sfx-key-show">show</button><button class="ivlib-btn" id="sfx-key-clear">clear</button></div>
+    <div class="sfx-set-row"><label for="sfx-model">model</label><input id="sfx-model" type="text" spellcheck="false"></div>
+    <div class="sfx-set-row"><label for="sfx-lang">into</label><input id="sfx-lang" type="text" spellcheck="false" placeholder="en"></div>
+    <p class="sfx-set-note">Get a key at aistudio.google.com/apikey. It stays in Spotify's local storage on this computer.</p>
+    <h3>Bridge</h3>
+    <label class="sfx-set-check"><input id="sfx-bridge" type="checkbox">send Spotify to local apps</label>
+    <div class="sfx-set-row"><label for="sfx-port">port</label><input id="sfx-port" type="number" min="1024" max="65535"></div>
+    <label class="sfx-set-check"><input id="sfx-control" type="checkbox">allow control (play, skip, seek, volume, queue, add to playlist)</label>
+    <p id="sfx-bridge-status"></p>
+    <h3>Start</h3>
+    <label class="sfx-set-check"><input id="sfx-auto" type="checkbox">open the deck when Spotify starts</label>
+    <div class="sfx-set-foot"><span>spotiflux ${VERSION} · esc closes</span><button class="ivlib-btn" id="sfx-set-close">close</button></div>
+  </div>`;
+  document.body.appendChild(setEl);
+  // Spotify's own shortcuts never see typing in here.
+  ["keydown", "keyup", "keypress"].forEach((t) => setEl.addEventListener(t, (e) => e.stopPropagation()));
+  const settings = { open: false };
+  function openSettings() {
+    $("sfx-key").value = cfg.key();
+    $("sfx-key").type = "password";
+    $("sfx-key-show").textContent = "show";
+    $("sfx-model").value = cfg.model();
+    $("sfx-lang").value = cfg.lang();
+    $("sfx-bridge").checked = cfg.bridge() === "1";
+    $("sfx-port").value = bridgePort();
+    $("sfx-control").checked = cfg.control() === "1";
+    $("sfx-auto").checked = autoStart();
+    renderBridgeStatus();
+    settings.open = true;
+    document.body.classList.add("sfx-settings-open");
+  }
+  function closeSettings() {
+    settings.open = false;
+    document.body.classList.remove("sfx-settings-open");
+    document.activeElement?.blur?.();
+  }
+  setEl.addEventListener("pointerdown", (e) => { if (e.target === setEl) closeSettings(); });
+  $("sfx-set-close").addEventListener("click", closeSettings);
+  $("sfx-key-show").addEventListener("click", () => {
+    const k = $("sfx-key");
+    k.type = k.type === "password" ? "text" : "password";
+    $("sfx-key-show").textContent = k.type === "password" ? "show" : "hide";
+  });
+  $("sfx-key-clear").addEventListener("click", () => { $("sfx-key").value = ""; $("sfx-key").dispatchEvent(new Event("change")); });
+  // Translation settings changed: retry this song with them.
+  const retranslate = () => { lyrics.tr = null; lyricsChanged(); translate(); };
+  $("sfx-key").addEventListener("change", () => { setCfg("key", $("sfx-key").value.trim()); retranslate(); });
+  $("sfx-model").addEventListener("change", () => { setCfg("model", $("sfx-model").value.trim()); retranslate(); });
+  $("sfx-lang").addEventListener("change", () => { setCfg("lang", $("sfx-lang").value.trim()); retranslate(); });
+  $("sfx-bridge").addEventListener("change", () => { setCfg("bridge", $("sfx-bridge").checked ? "1" : "0"); bridgeRestart(); });
+  $("sfx-port").addEventListener("change", () => { setCfg("port", $("sfx-port").value.trim()); $("sfx-port").value = bridgePort(); bridgeRestart(); });
+  $("sfx-control").addEventListener("change", () => {
+    setCfg("control", $("sfx-control").checked ? "1" : "0");
+    bridgeSend(helloMsg()); // receivers learn the new control_allowed
+  });
+  $("sfx-auto").addEventListener("change", () => {
+    localStorage.setItem(STORE_AUTO, $("sfx-auto").checked ? "1" : "0");
+    autoItem?.setState(autoStart());
+  });
+
+  // ---------- bridge: send Spotify out (spotiflux-bridge v1, docs/bridge.md) ----------
+  // A WebSocket client to ws://127.0.0.1:<port>; native apps run the server.
+  // Read-only unless "allow control" is on. Reconnects after 2 s, 5 s, 15 s,
+  // then every 60 s; logs once per state change. Nothing from the settings
+  // (the Gemini key above all) is ever sent.
+  const BRIDGE_RETRY_MS = [2000, 5000, 15000, 60000];
+  const MAX_FRAME = 65536;
+  const bridge = { ws: null, peer: "", tries: 0, timer: null, status: "", last: null, lastAt: 0 };
+
+  function setBridgeStatus(text) {
+    if (text === bridge.status) return;
+    bridge.status = text;
+    console.info(`[spotiflux] ${text}`);
+    renderBridgeStatus();
+  }
+  function renderBridgeStatus() { if ($("sfx-bridge-status")) $("sfx-bridge-status").textContent = bridge.status; }
+
+  function bridgeConnect() {
+    clearTimeout(bridge.timer);
+    if (cfg.bridge() !== "1") { setBridgeStatus("bridge: off"); return; }
+    const port = bridgePort();
+    setBridgeStatus(`bridge: waiting for an app on 127.0.0.1:${port}`);
+    let ws;
+    try { ws = new WebSocket(`ws://127.0.0.1:${port}`); } // localhost only, never anywhere else
+    catch (e) { setBridgeStatus(`bridge: can't open a connection (${e.message})`); return bridgeLater(); }
+    bridge.ws = ws;
+    ws.onopen = () => {
+      bridge.tries = 0;
+      bridge.peer = "";
+      setBridgeStatus("bridge: connected to an app");
+      bridgeSend(helloMsg());
+      bridge.last = stateMsg();
+      bridge.lastAt = bridge.last.at_epoch_ms;
+      bridgeSend(bridge.last);
+      if (!lyrics.loading) bridgeSend(lyricsMsg());
+    };
+    ws.onmessage = (e) => onBridgeFrame(e.data);
+    ws.onclose = () => {
+      if (bridge.ws !== ws) return; // replaced by bridgeRestart
+      bridge.ws = null;
+      setBridgeStatus(`bridge: waiting for an app on 127.0.0.1:${port}`);
+      bridgeLater();
+    };
+  }
+  function bridgeLater() {
+    const ms = BRIDGE_RETRY_MS[Math.min(bridge.tries++, BRIDGE_RETRY_MS.length - 1)];
+    bridge.timer = setTimeout(bridgeConnect, ms);
+  }
+  function bridgeRestart() {
+    const ws = bridge.ws;
+    bridge.ws = null;
+    try { ws?.close(); } catch {}
+    bridge.tries = 0;
+    bridgeConnect();
+  }
+  function bridgeSend(msg) {
+    if (bridge.ws?.readyState !== WebSocket.OPEN) return;
+    try { bridge.ws.send(JSON.stringify({ v: 1, ...msg })); } catch (e) { console.warn("[spotiflux] bridge send failed", e); }
+  }
+
+  const spotifyVersion = () => String(Spicetify.Platform?.version ?? Spicetify.Platform?.PlatformData?.client_version_triple ?? "");
+  const helloMsg = () => ({ type: "hello", app: "spotiflux", version: VERSION, spotify_version: spotifyVersion(), control_allowed: cfg.control() === "1" });
+  const REPEAT = ["off", "context", "track"];
+  function stateMsg() {
+    const P = Spicetify.Player, t = trackInfo(), c = P.data?.context;
+    return {
+      type: "state", playing: !!P.isPlaying?.(), uri: t.uri, title: t.title, artists: t.artists, album: t.album,
+      album_uri: t.album_uri, cover_url: t.cover_url, duration_ms: Math.round(P.getDuration?.() || t.duration_ms),
+      position_ms: Math.round(P.getProgress?.() ?? 0), at_epoch_ms: Date.now(), volume: Math.round((P.getVolume?.() ?? 1) * 100) / 100,
+      shuffle: !!P.getShuffle?.(), repeat: REPEAT[P.getRepeat?.() ?? 0] ?? "off",
+      context_uri: c?.uri ?? "", context_name: c?.metadata?.context_description ?? "",
+    };
+  }
+  const lyricsMsg = () => ({
+    type: "lyrics", uri: lyrics.uri ?? "", source: lyrics.lines.length ? lyrics.source : "none", synced: lyrics.synced, language: lyrics.language,
+    lines: lyrics.lines.map((l, i) => {
+      const x = lyrics.tr?.[i];
+      return { start_ms: l.start_ms, text: l.text, ...(x?.t ? { translation: x.t } : {}), ...(x?.p ? { pronunciation: x.p } : {}) };
+    }),
+  });
+  function queueMsg() {
+    const { cur, nxt } = queueSnapshot();
+    const out = (v) => ({ uri: v.uri, title: v.title, artists: v.artists, provider: v.provider });
+    return { type: "queue", current: cur ? out(cur) : null, next: nxt.map(out) };
+  }
+
+  // Every 250 ms: send state on a change (song, play/pause, volume, shuffle,
+  // repeat), on a seek (position off by more than 1.5 s), and every 5 s.
+  function bridgeTick() {
+    if (bridge.ws?.readyState !== WebSocket.OPEN) return;
+    const s = stateMsg(), l = bridge.last, now = s.at_epoch_ms;
+    const expected = l ? l.position_ms + (l.playing ? now - l.at_epoch_ms : 0) : 0;
+    const changed = !l || ["playing", "uri", "volume", "shuffle", "repeat", "duration_ms"].some((k) => s[k] !== l[k]);
+    if (changed || Math.abs(s.position_ms - expected) > 1500 || now - bridge.lastAt >= 5000) {
+      bridge.last = s;
+      bridge.lastAt = now;
+      bridgeSend(s);
+    }
+  }
+
+  // Incoming frames: validate everything, ignore what we don't know.
+  const URI_TRACK = /^spotify:(track|episode):[A-Za-z0-9]{22}$/, URI_PLAYLIST = /^spotify:playlist:[A-Za-z0-9]{22}$/;
+  const clampNum = (x, lo, hi) => (Number.isFinite(+x) ? Math.max(lo, Math.min(hi, +x)) : null);
+  function onBridgeFrame(data) {
+    if (typeof data !== "string" || data.length > MAX_FRAME) return;
+    let m;
+    try { m = JSON.parse(data); } catch { return; }
+    if (!m || typeof m !== "object" || m.v !== 1) return;
+    const id = typeof m.id === "string" || Number.isFinite(m.id) ? String(m.id).slice(0, 64) : "";
+    const ack = (ok, error) => bridgeSend({ type: "ack", id, ok, ...(error ? { error } : {}) });
+    if (m.type === "hello") {
+      bridge.peer = String(m.app ?? "an app").replace(/[^\w .:+()-]/g, "").slice(0, 64) || "an app";
+      setBridgeStatus(`bridge: connected to ${bridge.peer}${m.version ? ` ${String(m.version).slice(0, 24)}` : ""}`);
+    } else if (m.type === "get") {
+      const make = { state: stateMsg, lyrics: lyricsMsg, queue: queueMsg }[m.what];
+      if (make) bridgeSend({ ...make(), id }); else ack(false, "unknown what");
+    } else if (m.type === "cmd") {
+      if (cfg.control() !== "1") return ack(false, "control off");
+      runBridgeCmd(m).then(() => ack(true), (e) => ack(false, String(e?.message ?? e).slice(0, 200)));
+    }
+  }
+  async function runBridgeCmd(m) {
+    const P = Spicetify.Player;
+    switch (m.cmd) {
+      case "play": return P.play();
+      case "pause": return P.pause();
+      case "toggle": return P.togglePlay();
+      case "next": return P.next();
+      case "prev": return P.back();
+      case "seek": {
+        const ms = clampNum(m.position_ms, 0, P.getDuration?.() || 0);
+        if (ms === null) throw new Error("bad position_ms");
+        return P.seek(Math.max(2, Math.round(ms))); // seek() reads 0..1 as a fraction
+      }
+      case "volume": {
+        const v = clampNum(m.value, 0, 1);
+        if (v === null) throw new Error("bad value");
+        return P.setVolume(v);
+      }
+      case "queue_next":
+        if (typeof m.uri !== "string" || !URI_TRACK.test(m.uri)) throw new Error("bad uri");
+        if (!(await queueNext({ uri: m.uri, name: m.uri }))) throw new Error("queue refused");
+        return;
+      case "add_to_playlist": {
+        let pl = pinned;
+        if (m.playlist_uri != null) {
+          if (typeof m.playlist_uri !== "string" || !URI_PLAYLIST.test(m.playlist_uri)) throw new Error("bad playlist_uri");
+          pl = (await editablePlaylists()).find((p) => p.uri === m.playlist_uri);
+          if (!pl) throw new Error("not an editable playlist");
+        }
+        if (!pl) throw new Error("no pinned playlist");
+        if (!(await addToPlaylist(pl, P.data?.item?.uri))) throw new Error("add failed");
+        return;
+      }
+      default: throw new Error("unknown cmd");
+    }
+  }
+
+  // ---------- open / close the deck ----------
+  // Play a context, open the deck with the library pane, and come back to
+  // `from` when it's closed (playlist-home calls this).
   let returnPath = null;
   window.ivlib = {
     async launch(uri, from) {
       localStorage.setItem(STORE_OPEN, "1");
-      try { await Spicetify.Player.playUri(uri); } catch (e) { console.error("[ivlyrics-sidecar] play failed", e); }
+      try { await Spicetify.Player.playUri(uri); } catch (e) { console.error("[spotiflux] play failed", e); }
       if (document.body.classList.contains("ivlib-fs")) { focusZone("left"); return; }
-      if (!Spicetify.Platform.History.location.pathname.startsWith("/ivLyrics")) Spicetify.Platform.History.push("/ivLyrics");
-      for (let i = 0; i < 40; i++) {
-        const lc = window.lyricContainer;
-        if (typeof lc?.toggleFullscreen === "function") {
-          if (!lc.state?.isFullscreen) lc.toggleFullscreen();
-          returnPath = from ?? null;
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      console.warn("[ivlyrics-sidecar] ivLyrics not ready, stayed on its page");
+      returnPath = from ?? null;
+      enterFullscreen();
     },
   };
 
-  // Open ivLyrics fullscreen from anywhere (top-bar button, and at Spotify start).
-  async function enterFullscreen(tries = 40) {
-    if (document.body.classList.contains("ivlib-fs")) return;
-    if (!Spicetify.Platform.History.location.pathname.startsWith("/ivLyrics")) Spicetify.Platform.History.push("/ivLyrics");
-    for (let i = 0; i < tries; i++) {
-      const lc = window.lyricContainer;
-      if (typeof lc?.toggleFullscreen === "function") { if (!lc.state?.isFullscreen) lc.toggleFullscreen(); return; }
-      await new Promise((r) => setTimeout(r, 100));
+  function setFs(on) {
+    if (on === document.body.classList.contains("ivlib-fs")) return;
+    document.body.classList.toggle("ivlib-fs", on);
+    if (on) {
+      document.body.appendChild(root); // last in <body>: wins equal-z ties
+      renderDeck();
+      tickDeck();
+      layout();
+      setOpen(localStorage.getItem(STORE_OPEN) === "1");
+      if (state.open) autoNow(); // pane was already open when the deck was left
+      setFocus(state.open ? "left" : null);
+      setTimeout(hideCornerChrome, 600);
+      lyr.key = "";
+      updateLyricBox();
+    } else {
+      if (state.open) state.hiddenAt = Date.now();
+      closeHelp();
+      closeCtx();
+      closeSync();
+      setFocus(null);
+      setNext(false);
+      if (returnPath) { Spicetify.Platform.History.push(returnPath); returnPath = null; }
     }
   }
+  const enterFullscreen = () => setFs(true);
+  const exitFullscreen = () => setFs(false);
   window.ivlib.enter = enterFullscreen;
-  function exitFullscreen() {
-    const lc = window.lyricContainer;
-    if (lc?.state?.isFullscreen && typeof lc.toggleFullscreen === "function") lc.toggleFullscreen();
-  }
   $("ivexit").addEventListener("click", exitFullscreen);
   try {
-    const icon = `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="3" height="10" rx=".8"/><rect x="5.5" y="2" width="5" height="12" rx="1"/><rect x="12" y="3" width="3" height="10" rx=".8"/></svg>`;
-    new Spicetify.Topbar.Button("ivLyrics deck", icon, () => enterFullscreen());
-  } catch (e) { console.warn("[ivlyrics-sidecar] top-bar button unavailable", e); }
+    const deckIcon = `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="3" height="10" rx=".8"/><rect x="5.5" y="2" width="5" height="12" rx="1"/><rect x="12" y="3" width="3" height="10" rx=".8"/></svg>`;
+    new Spicetify.Topbar.Button("spotiflux deck", deckIcon, () => enterFullscreen());
+  } catch (e) { console.warn("[spotiflux] top-bar button unavailable", e); }
 
-  // At Spotify start: straight into fullscreen with the library pane (unless
-  // switched off in the profile menu), else playlist-home (if installed)
-  // instead of Spotify's home feed. Leaving fullscreen lands on that start page.
-  const STORE_AUTO = "ivlib:autostart";
-  const autoStart = () => localStorage.getItem(STORE_AUTO) !== "0";
+  // At Spotify start: straight into the deck with the library pane (unless
+  // switched off), else playlist-home (if installed) instead of Spotify's
+  // home feed. Leaving the deck lands on that start page.
   try {
     const H = Spicetify.Platform.History;
     const home = Spicetify.Config?.custom_apps?.includes("playlist-home") ? "/playlist-home" : null;
@@ -2239,49 +2687,26 @@
       if (autoStart()) {
         if (localStorage.getItem(STORE_OPEN) === null) localStorage.setItem(STORE_OPEN, "1");
         returnPath = home ?? "/";
-        enterFullscreen(150); // ivLyrics can take several seconds to load on a cold start
+        enterFullscreen();
       }
     }
-  } catch (e) { console.warn("[ivlyrics-sidecar] start-page redirect failed", e); }
+  } catch (e) { console.warn("[spotiflux] start-page redirect failed", e); }
+  let autoItem = null;
   try {
-    new Spicetify.Menu.Item("Open ivLyrics fullscreen at start", autoStart(), (item) => {
+    autoItem = new Spicetify.Menu.Item("Open the spotiflux deck at start", autoStart(), (item) => {
       localStorage.setItem(STORE_AUTO, autoStart() ? "0" : "1");
       item.setState(autoStart());
-    }).register();
-  } catch (e) { console.warn("[ivlyrics-sidecar] profile-menu item unavailable", e); }
+    });
+    autoItem.register();
+    new Spicetify.Menu.Item("spotiflux settings…", false, () => openSettings()).register();
+  } catch (e) { console.warn("[spotiflux] profile-menu items unavailable", e); }
 
-  // Show only while ivLyrics is fullscreen.
-  const syncFs = () => {
-    const fs = !!document.querySelector(FS_SELECTOR);
-    if (fs === document.body.classList.contains("ivlib-fs")) return;
-    document.body.classList.toggle("ivlib-fs", fs);
-    // ivLyrics appends a fresh #lyrics-fullscreen-container to <body> on every
-    // enter; move ourselves after it so equal-z ties resolve in our favour.
-    if (fs) {
-      document.body.appendChild(root);
-      setOpen(localStorage.getItem(STORE_OPEN) === "1");
-      if (state.open) autoNow(); // pane was already open when fullscreen was left
-      setFocus(state.open ? "left" : null);
-      setTimeout(hideCornerChrome, 600);
-      startBand(true);
-    } else {
-      if (state.open) state.hiddenAt = Date.now();
-      closeHelp();
-      closeCtx();
-      closeSync();
-      setFocus(null);
-      startBand(false);
-      setNext(false);
-      if (returnPath) { Spicetify.Platform.History.push(returnPath); returnPath = null; }
-    }
-  };
-  // Karaoke mutates classes every frame; coalesce to one check per frame.
-  let fsQueued = false;
-  const queueFs = () => {
-    if (fsQueued) return;
-    fsQueued = true;
-    requestAnimationFrame(() => { fsQueued = false; syncFs(); updateLyricBox(); });
-  };
-  new MutationObserver(queueFs).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"], childList: true });
-  syncFs();
+  // One clock for the deck, the lyric line and the bridge.
+  setInterval(() => {
+    if ((Spicetify.Player.data?.item?.uri ?? "") !== lyrics.uri) loadLyrics();
+    lyricClock();
+    if (document.body.classList.contains("ivlib-fs")) tickDeck();
+    bridgeTick();
+  }, 250);
+  bridgeConnect();
 })();

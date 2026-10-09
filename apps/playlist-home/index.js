@@ -1,7 +1,7 @@
 // playlist-home — Spicetify custom app.
 // Your playlists (incl. Liked Songs), grouped by folder. Clicking one plays it
-// and jumps straight into ivLyrics fullscreen with the ivlyrics-sidecar library pane
-// open (via window.ivlib.launch). Exiting fullscreen brings you back here.
+// and opens the spotiflux deck with its library pane open (via
+// window.ivlib.launch). Leaving the deck brings you back here.
 
 /** @type {React} */
 const react = Spicetify.React;
@@ -36,7 +36,7 @@ async function loadGroups() {
 
 function launch(uri) {
   if (window.ivlib?.launch) return window.ivlib.launch(uri, ROUTE);
-  // ivlyrics-sidecar extension missing: at least play it.
+  // spotiflux extension missing: at least play it.
   Spicetify.Player.playUri(uri);
 }
 
