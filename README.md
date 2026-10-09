@@ -387,6 +387,9 @@ You can't edit that playlist (it belongs to someone else and isn't collaborative
 **`Can't play <name>`**
 Spotify refused to play that item, usually because it's unavailable in your country or was removed. Try another one.
 
+**The deck icon is missing from Spotify's top bar.**
+On Spotify 1.3.4, Spicetify's own top-bar buttons don't appear, so spotiflux puts its icon in the row of custom-app icons (the Playlists page and Marketplace icons, for example), a few seconds after Spotify starts. If you have no custom apps installed, that row doesn't exist and the icon can't be placed. The deck still opens by itself at start; to get the icon, install the Playlists page with the installer.
+
 **The window buttons are always visible.**
 Your Spotify version doesn't expose the function that hides them. Everything else still works.
 

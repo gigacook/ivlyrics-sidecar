@@ -2017,9 +2017,17 @@
   const lyrics = { uri: null, source: "none", synced: false, language: "", lines: [], loading: "", idx: -1, tr: null, english: null };
   const cleanLine = (t) => { const s = String(t ?? "").replace(/\s+/g, " ").trim(); return s === "♪" ? "" : s; };
 
+  // Spotify 1.3.4's CosmosAsync can't reach spclient ("Resolver not found"), so
+  // a plain fetch with the client's own access token. 404 = Spotify has none.
   async function fromSpotify(uri) {
-    const body = await Spicetify.CosmosAsync.get(
-      `https://spclient.wg.spotify.com/color-lyrics/v2/track/${uri.split(":")[2]}?format=json&vocalRemoval=false&market=from_token`);
+    const url = `https://spclient.wg.spotify.com/color-lyrics/v2/track/${uri.split(":")[2]}?format=json&vocalRemoval=false&market=from_token`;
+    const token = Spicetify.Platform.AuthorizationAPI?.getState?.()?.token?.accessToken;
+    let body = null;
+    if (token) {
+      const r = await fetch(url, { headers: { authorization: `Bearer ${token}`, "app-platform": "WebPlayer" } });
+      if (r.ok) body = await r.json();
+      else if (r.status !== 404) throw new Error(`spotify lyrics ${r.status}`);
+    } else body = await Spicetify.CosmosAsync.get(url);
     const l = body?.lyrics;
     if (!l?.lines?.length) return null;
     const synced = l.syncType === "LINE_SYNCED" || l.syncType === "SYLLABLE_SYNCED";
@@ -2061,8 +2069,12 @@
       const all = Array.isArray(found) ? found : [];
       hit = all.find((h) => h.syncedLyrics && Math.abs(h.duration - secs) <= 3) ?? all.find((h) => h.syncedLyrics) ?? all.find((h) => h.plainLyrics);
     }
-    if (hit?.syncedLyrics) return { source: "lrclib", synced: true, language: "", lines: parseLrc(hit.syncedLyrics) };
-    if (hit?.plainLyrics) return { source: "lrclib", synced: false, language: "", lines: hit.plainLyrics.split(/\r?\n/).map((x) => ({ start_ms: 0, text: cleanLine(x) })) };
+    // LRCLIB has junk entries ("probe", one line); a real song has more than a few lines.
+    const enough = (lines) => lines.filter((l) => l.text).length >= 4;
+    const synced = hit?.syncedLyrics ? parseLrc(hit.syncedLyrics) : [];
+    if (enough(synced)) return { source: "lrclib", synced: true, language: "", lines: synced };
+    const plain = String(hit?.plainLyrics ?? "").split(/\r?\n/).map((x) => ({ start_ms: 0, text: cleanLine(x) }));
+    if (enough(plain)) return { source: "lrclib", synced: false, language: "", lines: plain };
     return null;
   }
 
@@ -2684,8 +2696,20 @@
   window.ivlib.enter = enterFullscreen;
   $("ivexit").addEventListener("click", exitFullscreen);
   try {
-    const deckIcon = `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="3" height="10" rx=".8"/><rect x="5.5" y="2" width="5" height="12" rx="1"/><rect x="12" y="3" width="3" height="10" rx=".8"/></svg>`;
-    new Spicetify.Topbar.Button("spotiflux deck", deckIcon, () => enterFullscreen());
+    const deckIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="3" width="3" height="10" rx=".8"/><rect x="5.5" y="2" width="5" height="12" rx="1"/><rect x="12" y="3" width="3" height="10" rx=".8"/></svg>`;
+    const deckBtn = new Spicetify.Topbar.Button("spotiflux deck", deckIcon, () => enterFullscreen());
+    // Spotify 1.3.4: Topbar.Button finds no container and the icon never shows.
+    // Then it joins the custom-app icons (Spicetify's own row), in their style.
+    const placeDeckButton = (tries) => {
+      if (deckBtn.element.isConnected) return;
+      const row = document.querySelector(".spicetify-sc-scroller > div");
+      if (!row) { if (tries < 20) setTimeout(() => placeDeckButton(tries + 1), 1000); return; }
+      const look = row.querySelector("button");
+      if (look) deckBtn.button.className = look.className;
+      deckBtn.element.setAttribute("role", "presentation");
+      row.prepend(deckBtn.element);
+    };
+    setTimeout(() => placeDeckButton(0), 3000);
   } catch (e) { console.warn("[spotiflux] top-bar button unavailable", e); }
 
   // At Spotify start: straight into the deck with the library pane (unless
