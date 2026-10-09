@@ -17,3 +17,6 @@ CLAUDE.md
 *.pfx
 secrets*
 *credentials*
+
+# Rust build output of the bridge crate
+bridge/target/

@@ -1,0 +1,12 @@
+[package]
+name = "spotiflux-bridge"
+version = "0.1.0"
+edition = "2024"
+description = "Receiver side of the spotiflux bridge: what Spotify plays, its lyrics and (opt-in) control, over a localhost WebSocket."
+license = "MIT"
+repository = "https://github.com/gigacook/spotiflux"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tungstenite = "0.30"
