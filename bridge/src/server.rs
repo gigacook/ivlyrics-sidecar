@@ -28,6 +28,8 @@ use tungstenite::{Message, WebSocket};
 pub const MAX_FRAME_BYTES: usize = 1 << 20;
 /// How long a connection thread blocks in a read before it checks for writes.
 const POLL: Duration = Duration::from_millis(25);
+/// Longest wait for a handshake or for a write to go through.
+const STALL: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -178,6 +180,9 @@ fn origin_allowed(origin: Option<&str>) -> bool {
 
 fn serve(stream: TcpStream, shared: Arc<Shared>, events: Sender<Event>) {
     let _ = stream.set_nodelay(true);
+    // A client that never finishes the handshake, or stops reading, can't hold this thread forever.
+    let _ = stream.set_read_timeout(Some(STALL));
+    let _ = stream.set_write_timeout(Some(STALL));
     let mut refused = None;
     let check = |req: &Request, resp: Response| -> Result<Response, ErrorResponse> {
         let origin = req.headers().get("origin").map(|o| o.to_str().unwrap_or("?").to_string());
@@ -207,8 +212,8 @@ fn serve(stream: TcpStream, shared: Arc<Shared>, events: Sender<Event>) {
     // Newest connection wins: replacing the write queue ends the older thread.
     let generation = shared.next_gen.fetch_add(1, Ordering::Relaxed);
     let (out_tx, out_rx) = mpsc::channel::<String>();
+    lock(&shared.waiters).clear(); // first, so a request on the new connection keeps its waiter
     *lock(&shared.conn) = Some((generation, out_tx));
-    lock(&shared.waiters).clear();
     let _ = events.send(Event::Connected);
     if ws.send(Message::text(encode(&Incoming::Hello(shared.hello.clone())))).is_ok() {
         run(&mut ws, &out_rx, &shared, &events);

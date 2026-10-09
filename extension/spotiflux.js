@@ -1506,7 +1506,8 @@
     const fs = document.body.classList.contains("ivlib-fs");
     const mod = e.altKey || e.ctrlKey || e.metaKey;
     const consume = () => { e.preventDefault(); e.stopImmediatePropagation(); };
-    const field = e.target?.matches?.("input, textarea, [contenteditable='true']") ? e.target : null;
+    const field = e.target?.matches?.("input:not([type=range]), textarea, [contenteditable='true']") ? e.target : null;
+    if (e.target === deck.vol) deck.vol.blur(); // the volume slider never keeps the keys
     // The settings dialog owns the keyboard while it's open; Esc closes it.
     if (settings.open) { if (e.key === "Escape") { consume(); closeSettings(); } return; }
 
@@ -2042,19 +2043,21 @@
   // set User-Agent, so its Lrclib-Client header).
   let lrcChain = Promise.resolve();
   const LRC_HEADERS = { "Lrclib-Client": `spotiflux ${VERSION} (https://github.com/gigacook/spotiflux)` };
-  const lrcGet = (path) => (lrcChain = lrcChain.catch(() => {}).then(async () => {
-    const r = await fetch(`https://lrclib.net/api/${path}`, { headers: LRC_HEADERS });
+  // A job whose song is no longer playing is skipped; a stalled request gives up after 8 s.
+  const lrcGet = (path, wanted) => (lrcChain = lrcChain.catch(() => {}).then(async () => {
+    if (!wanted()) throw new Error("song changed");
+    const r = await fetch(`https://lrclib.net/api/${path}`, { headers: LRC_HEADERS, signal: AbortSignal.timeout(8000) });
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`lrclib ${r.status}`);
     return r.json();
   }));
 
-  async function fromLrclib(t) {
+  async function fromLrclib(t, wanted) {
     const q = (o) => new URLSearchParams(o).toString();
     const artist = t.artists[0] ?? "", secs = Math.round(t.duration_ms / 1000);
-    let hit = await lrcGet(`get?${q({ track_name: t.title, artist_name: artist, album_name: t.album, duration: secs })}`);
+    let hit = await lrcGet(`get?${q({ track_name: t.title, artist_name: artist, album_name: t.album, duration: secs })}`, wanted);
     if (!hit?.syncedLyrics && !hit?.plainLyrics) {
-      const found = await lrcGet(`search?${q({ track_name: t.title, artist_name: artist })}`);
+      const found = await lrcGet(`search?${q({ track_name: t.title, artist_name: artist })}`, wanted);
       const all = Array.isArray(found) ? found : [];
       hit = all.find((h) => h.syncedLyrics && Math.abs(h.duration - secs) <= 3) ?? all.find((h) => h.syncedLyrics) ?? all.find((h) => h.plainLyrics);
     }
@@ -2069,6 +2072,7 @@
     let res = lyrCache.get(uri) ?? (noLyrics.has(uri) ? null : undefined);
     if (res === undefined && /^spotify:(track|local):/.test(uri)) {
       res = null;
+      let failed = false;
       if (uri.startsWith("spotify:track:")) {
         lyrics.loading = "spotify";
         lyricsChanged();
@@ -2077,9 +2081,14 @@
       if (!res && t.title && lyrics.uri === uri) {
         lyrics.loading = "lrclib";
         lyricsChanged();
-        try { res = await fromLrclib(t); } catch (e) { console.warn("[spotiflux] lrclib failed", e); }
+        try { res = await fromLrclib(t, () => lyrics.uri === uri); } catch (e) { failed = true; console.warn("[spotiflux] lrclib failed", e); }
       }
-      if (res?.lines.length) lyrCache.set(uri, res); else { res = null; noLyrics.add(uri); }
+      if (res?.lines.length) lyrCache.set(uri, res);
+      else {
+        res = null;
+        // Only a complete "nobody has them" counts; a skip or an error tries again next time.
+        if (!failed && lyrics.uri === uri) noLyrics.add(uri);
+      }
     }
     if (lyrics.uri !== uri) return; // the song changed meanwhile
     Object.assign(lyrics, res ?? {}, { loading: "" });
@@ -2131,7 +2140,7 @@
     }
     let arr = null;
     try { arr = JSON.parse((body?.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("")); } catch {}
-    if (!Array.isArray(arr)) throw new Error("Gemini reply unreadable");
+    if (!Array.isArray(arr) || !arr.some((x) => String(x?.t ?? "").trim())) throw new Error("Gemini reply unreadable");
     return texts.map((_, i) => ({ t: String(arr[i]?.t ?? "").trim(), p: String(arr[i]?.p ?? "").trim() }));
   }
 
@@ -2139,7 +2148,7 @@
     const { uri, lines } = lyrics, key = cfg.key(), lang = cfg.lang();
     if (!key || lyrics.english !== false || !lines.some((l) => l.text)) return;
     let tr = trCache.get(`${uri}|${lang}`);
-    if (!tr) {
+    if (tr?.length !== lines.length) { // none yet, or made for other lyrics of this song
       try {
         tr = await gemini(lines.map((l) => l.text), lang, key);
         trCache.set(`${uri}|${lang}`, tr);
@@ -2149,7 +2158,7 @@
         return;
       }
     }
-    if (lyrics.uri !== uri || lyrics.lines !== lines) return;
+    if (lyrics.uri !== uri || lyrics.lines !== lines || cfg.lang() !== lang) return;
     lyrics.tr = tr;
     lyricsChanged();
   }
@@ -2380,7 +2389,7 @@
   }
   window.addEventListener("wheel", (e) => {
     if (!document.body.classList.contains("ivlib-fs")) return;
-    if (e.target?.closest?.("#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg")) return;
+    if (e.target?.closest?.("#ivlib-panel, #ivnext-panel, #ivlib-ctx, #ivsync-dlg, #sfx-settings")) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     vol.acc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
@@ -2441,6 +2450,7 @@
     renderBridgeStatus();
     settings.open = true;
     document.body.classList.add("sfx-settings-open");
+    setTimeout(() => $("sfx-key").focus({ preventScroll: true }), 0); // Tab walks the fields from here
   }
   function closeSettings() {
     settings.open = false;
@@ -2478,7 +2488,7 @@
   // (the Gemini key above all) is ever sent.
   const BRIDGE_RETRY_MS = [2000, 5000, 15000, 60000];
   const MAX_FRAME = 65536;
-  const bridge = { ws: null, peer: "", tries: 0, timer: null, status: "", last: null, lastAt: 0 };
+  const bridge = { ws: null, peer: "", tries: 0, timer: null, status: "", last: null, lastAt: 0, openAt: 0 };
 
   function setBridgeStatus(text) {
     if (text === bridge.status) return;
@@ -2498,7 +2508,7 @@
     catch (e) { setBridgeStatus(`bridge: can't open a connection (${e.message})`); return bridgeLater(); }
     bridge.ws = ws;
     ws.onopen = () => {
-      bridge.tries = 0;
+      bridge.openAt = Date.now();
       bridge.peer = "";
       setBridgeStatus("bridge: connected to an app");
       bridgeSend(helloMsg());
@@ -2511,6 +2521,7 @@
     ws.onclose = () => {
       if (bridge.ws !== ws) return; // replaced by bridgeRestart
       bridge.ws = null;
+      if (Date.now() - bridge.openAt > 10000) bridge.tries = 0; // an app that drops us at once still backs off
       setBridgeStatus(`bridge: waiting for an app on 127.0.0.1:${port}`);
       bridgeLater();
     };
@@ -2573,7 +2584,7 @@
 
   // Incoming frames: validate everything, ignore what we don't know.
   const URI_TRACK = /^spotify:(track|episode):[A-Za-z0-9]{22}$/, URI_PLAYLIST = /^spotify:playlist:[A-Za-z0-9]{22}$/;
-  const clampNum = (x, lo, hi) => (Number.isFinite(+x) ? Math.max(lo, Math.min(hi, +x)) : null);
+  const clampNum = (x, lo, hi) => (typeof x === "number" && Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : null);
   function onBridgeFrame(data) {
     if (typeof data !== "string" || data.length > MAX_FRAME) return;
     let m;
@@ -2585,8 +2596,8 @@
       bridge.peer = String(m.app ?? "an app").replace(/[^\w .:+()-]/g, "").slice(0, 64) || "an app";
       setBridgeStatus(`bridge: connected to ${bridge.peer}${m.version ? ` ${String(m.version).slice(0, 24)}` : ""}`);
     } else if (m.type === "get") {
-      const make = { state: stateMsg, lyrics: lyricsMsg, queue: queueMsg }[m.what];
-      if (make) bridgeSend({ ...make(), id }); else ack(false, "unknown what");
+      const makers = { state: stateMsg, lyrics: lyricsMsg, queue: queueMsg };
+      if (Object.hasOwn(makers, m.what)) bridgeSend({ ...makers[m.what](), id }); else ack(false, "unknown what");
     } else if (m.type === "cmd") {
       if (cfg.control() !== "1") return ack(false, "control off");
       runBridgeCmd(m).then(() => ack(true), (e) => ack(false, String(e?.message ?? e).slice(0, 200)));
@@ -2659,6 +2670,7 @@
       updateLyricBox();
     } else {
       if (state.open) state.hiddenAt = Date.now();
+      if (document.activeElement === deck.vol) deck.vol.blur();
       closeHelp();
       closeCtx();
       closeSync();
