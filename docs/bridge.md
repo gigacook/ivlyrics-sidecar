@@ -14,11 +14,11 @@ The spotiflux extension runs inside the Spotify desktop app and sends what Spoti
 ## How the connection works
 
 1. **Your app is the server.** It listens for WebSocket connections on `127.0.0.1`, port **47474** by default. The user can change the port in spotiflux's settings; your app should let the user change it too.
-2. **spotiflux is the client.** While its bridge is on (the default), it connects to `ws://127.0.0.1:<port>`: when Spotify starts, then after 2, 5 and 15 seconds, then once a minute, until a connection succeeds. After a disconnect it starts over with the same delays. Start order doesn't matter.
+2. **spotiflux is the client.** While its bridge is on (the default), it connects to `ws://127.0.0.1:<port>`: when Spotify starts, then after 2, 5 and 15 seconds, then once a minute, until a connection succeeds. After a disconnect that came more than 10 seconds after connecting, it starts over with the same delays; after a shorter connection it keeps backing off. Start order doesn't matter.
 3. **One connection at a time.** Spotify reloads its page when it restarts, so a new connection from spotiflux replaces the old one. The Rust server does this for you.
 4. **Origin.** Because spotiflux runs in Spotify's page, its handshake carries an `Origin` header from Spotify's own page, `https://spotify.com` or `https://<something>.spotify.com`. Refuse handshakes with any other Origin: they come from web pages in a browser, which can open WebSockets to localhost too. Native clients send no Origin.
 
-On connect, spotiflux sends `hello`, then `state`, then `lyrics` (when the song's lyrics have finished loading). Send your own `hello` so the user sees your app's name in spotiflux's settings.
+On connect, spotiflux sends `hello`, then `state`, then `lyrics` (when the song's lyrics have finished loading). No `line` follows on connect: the first one comes when the current line next changes, so until then find the line yourself (`Lyrics::line_at` in the crate). Send your own `hello` so the user sees your app's name in spotiflux's settings.
 
 ## Frames
 
@@ -32,7 +32,7 @@ Every message is one WebSocket **text** frame holding one JSON object:
 - `type` says which message it is. Ignore types you don't know.
 - Units are in the field names: `_ms` is milliseconds, `_epoch_ms` is milliseconds since 1970-01-01 UTC (the Unix epoch).
 - Ignore fields you don't know: later versions of v1 may add fields, never remove or change them.
-- spotiflux ignores frames from your app that are longer than 65,536 characters, aren't JSON, have another `v`, or have an unknown `type` or `cmd`.
+- spotiflux ignores frames from your app that are longer than 65,536 characters, aren't JSON, have another `v`, or have an unknown `type`. The limit counts JavaScript characters (UTF-16 units), not bytes. An unknown `cmd` is not ignored: it gets an `ack` with an error.
 
 ## From spotiflux to your app
 
@@ -49,7 +49,7 @@ Sent on connect, and again whenever the user switches "allow control".
 
 ### `state`
 
-Sent on connect, on song change, on play or pause, after a seek (the position moved more than 1.5 s from where it should be), on a change of volume, shuffle or repeat, and every 5 seconds as a heartbeat. Also the answer to `get` with `what: "state"`.
+Sent on connect, on song change, on play or pause, after a seek (the position moved more than 1.5 s from where it should be), on a change of volume, shuffle, repeat or song length, and every 5 seconds as a heartbeat. Also the answer to `get` with `what: "state"`.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -91,7 +91,7 @@ Sent when a song's lyrics have loaded (also when there are none), again when tra
 
 ### `line`
 
-Sent whenever the current line changes, checked four times a second. The user's per-song sync offset is already applied, so prefer this over your own clock.
+Sent whenever the current line changes, checked four times a second, and once more (same index) after every `lyrics` message. The user's per-song sync offset is already applied, so prefer this over your own clock.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -127,8 +127,8 @@ The answer to every `cmd`, and to a `get` with an unknown `what`.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `app` | string | Your app's name, shown in spotiflux's settings as `bridge: connected to <app> <version>`. Letters, digits, spaces and `. : + ( ) - _` are kept, up to 64 characters. |
-| `version` | string | Your app's version. |
+| `app` | string | Your app's name, shown in spotiflux's settings as `bridge: connected to <app> <version>`. ASCII letters and digits, spaces and `. : + ( ) - _` are kept (other characters are dropped), up to 64 characters. An empty name shows as "an app". |
+| `version` | string | Your app's version, cut to 24 characters. |
 
 ### `get`
 
@@ -157,10 +157,10 @@ Only obeyed while the user has "allow control" switched on. Otherwise the answer
 | `toggle` | | Play if paused, pause if playing. |
 | `next` | | Next track. |
 | `prev` | | Previous track (or the start of this one, as Spotify's button does). |
-| `seek` | `position_ms` (number of milliseconds, 0 or more) | Jump to that position, clamped to the song's length. |
+| `seek` | `position_ms` (number of milliseconds, 0 or more) | Jump to that position, clamped to the song's length. 0 goes to 2 ms (Spotify reads 0 to 1 as a fraction). |
 | `volume` | `value` (number, 0 to 1) | Set the volume, clamped to 0 to 1. |
 | `queue_next` | `uri` (`spotify:track:…` or `spotify:episode:…`) | Put the track first in the queue, without interrupting the song. |
-| `add_to_playlist` | `playlist_uri` (`spotify:playlist:…`), optional | Add the playing song to that playlist. Without `playlist_uri`, to the playlist the user pinned with Ctrl+Shift+A in this Spotify session. |
+| `add_to_playlist` | `playlist_uri` (`spotify:playlist:…`), optional | Add the playing song to that playlist. Without `playlist_uri`, to the playlist the user pinned in this Spotify session (the picker opens with Ctrl+Shift+A, or Ctrl+Shift+S when nothing is pinned). |
 
 | `error` | Meaning |
 |---|---|
@@ -173,7 +173,7 @@ Only obeyed while the user has "allow control" switched on. Otherwise the answer
 | `not an editable playlist` | The user can't add to that playlist. |
 | `unknown what` | A `get` with a `what` not in the list. |
 
-Any other text is an error message from Spotify itself.
+Any other text is an error message from Spotify itself, cut to 200 characters. A request without a valid `id` gets its `ack` with `id: ""`.
 
 ## Example session
 
@@ -211,28 +211,33 @@ GIGAPLAY (Tauri, Rust) can take the crate as a git dependency. In `src-tauri/Car
 spotiflux-bridge = { git = "https://github.com/gigacook/spotiflux", package = "spotiflux-bridge" }
 ```
 
-In the Tauri `setup` hook, start the server and forward events to the frontend, one Tauri event per message type, in gp-protocol's style (`gp://` names, units in field names, serde types shared with the frontend):
+In the Tauri `setup` hook, start the server and forward events to the frontend, one Tauri event per message type, in gp-protocol's style (`gp://` names, units in field names, serde types shared with the frontend). Name them `spotiflux_*`, not `spotify_*`, so they don't mix with GIGAPLAY's own Spotify provider, and add the names to gp-protocol's event and command lists so its contract test still passes.
 
 ```rust
 use spotiflux_bridge::{Bridge, Event, Outgoing, DEFAULT_PORT};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 .setup(|app| {
-    let (bridge, events) = Bridge::listen(DEFAULT_PORT, "GIGAPLAY", env!("CARGO_PKG_VERSION"))?;
-    app.manage(bridge); // commands use it: bridge.send_cmd(Cmd::Toggle, Duration::from_secs(2))
     let handle = app.handle().clone();
-    std::thread::spawn(move || {
-        for event in events {
-            let _ = match event {
-                Event::Message(Outgoing::State(s)) => handle.emit("gp://spotify_state", s),
-                Event::Message(Outgoing::Lyrics(l)) => handle.emit("gp://spotify_lyrics", l),
-                Event::Message(Outgoing::Line(l)) => handle.emit("gp://spotify_line", l),
-                Event::Message(Outgoing::Hello(h)) => handle.emit("gp://spotify_hello", h),
-                Event::Disconnected => handle.emit("gp://spotify_hello", ()),
-                _ => Ok(()),
-            };
+    // A taken port must not stop GIGAPLAY from starting: report it and carry on.
+    match Bridge::listen(DEFAULT_PORT, "GIGAPLAY", env!("CARGO_PKG_VERSION")) {
+        Ok((bridge, events)) => {
+            app.manage(bridge); // commands use it: bridge.send_cmd(Cmd::Toggle, Duration::from_secs(2))
+            std::thread::spawn(move || {
+                for event in events {
+                    let _ = match event {
+                        Event::Message(Outgoing::State(s)) => handle.emit("gp://spotiflux_state", s),
+                        Event::Message(Outgoing::Lyrics(l)) => handle.emit("gp://spotiflux_lyrics", l),
+                        Event::Message(Outgoing::Line(l)) => handle.emit("gp://spotiflux_line", l),
+                        Event::Message(Outgoing::Hello(h)) => handle.emit("gp://spotiflux_status", Some(h)),
+                        Event::Disconnected => handle.emit("gp://spotiflux_status", None::<()>),
+                        _ => Ok(()),
+                    };
+                }
+            });
         }
-    });
+        Err(e) => { let _ = handle.emit("gp://spotiflux_status_error", e.to_string()); }
+    }
     Ok(())
 })
 ```
@@ -250,7 +255,7 @@ http.Start();
 while (true) {
     var ctx = await http.GetContextAsync();
     var origin = ctx.Request.Headers["Origin"];
-    if (!ctx.Request.IsWebSocketRequest || (origin != null && !origin.EndsWith(".spotify.com"))) {
+    if (!ctx.Request.IsWebSocketRequest || (origin != null && !(origin == "https://spotify.com" || (origin.StartsWith("https://") && origin.EndsWith(".spotify.com"))))) {
         ctx.Response.StatusCode = 403; ctx.Response.Close(); continue;
     }
     var ws = (await ctx.AcceptWebSocketAsync(null)).WebSocket;

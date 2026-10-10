@@ -268,7 +268,7 @@ pub enum Cmd {
     Volume { value: f64 },
     /// Put a track first in the queue. `spotify:track:…` or `spotify:episode:…`.
     QueueNext { uri: String },
-    /// Add the playing song to a playlist; without a uri, to the pinned one (Ctrl+Shift+S).
+    /// Add the playing song to a playlist; without a uri, to the playlist pinned in this Spotify session (picker: Ctrl+Shift+A).
     AddToPlaylist {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         playlist_uri: Option<String>,
