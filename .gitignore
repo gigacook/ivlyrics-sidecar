@@ -1,5 +1,6 @@
 # Personal working material: backups, raw settings with keys, Spicetify copy.
 local/
+llm/
 # Editor / OS noise
 .vscode/
 .idea/
