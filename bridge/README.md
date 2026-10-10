@@ -44,6 +44,7 @@ Run the bundled listener against your Spotify: `cargo run --example listen` (typ
 | `Outgoing` | `Hello`, `State`, `Lyrics`, `Line`, `Queue`, `Ack` |
 | `bridge.get(What, timeout)` | Ask for `State`, `Lyrics` or `Queue`; always allowed. |
 | `bridge.send_cmd(Cmd, timeout)` | `Play`, `Pause`, `Toggle`, `Next`, `Prev`, `Seek`, `Volume`, `QueueNext`, `AddToPlaylist`; obeyed only with "allow control" on. |
+| `bridge.shutdown()` | Stop listening and free the port (port change, hand the port to another app). |
 | `State::position_ms_now()` / `position_ms_at(t)` | Interpolated playback position. |
 | `Lyrics::line_at(position_ms)` | Current line without waiting for `Line` (no user sync offset). |
 | `parse` / `encode` | Raw protocol frames, for tests or other transports. |

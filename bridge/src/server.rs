@@ -14,7 +14,7 @@ use crate::{AppHello, Ack, Cmd, CmdMsg, Get, Incoming, Outgoing, What, encode, p
 use std::collections::HashMap;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
@@ -76,6 +76,8 @@ struct Shared {
     waiters: Mutex<HashMap<String, Sender<Outgoing>>>,
     next_id: AtomicU64,
     next_gen: AtomicU64,
+    /// Set by `shutdown`; the accept loop stops at its next wake-up.
+    closed: AtomicBool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -102,11 +104,15 @@ impl Bridge {
             waiters: Mutex::new(HashMap::new()),
             next_id: AtomicU64::new(1),
             next_gen: AtomicU64::new(1),
+            closed: AtomicBool::new(false),
         });
         let (events, rx) = mpsc::channel();
         let accept_shared = shared.clone();
         thread::Builder::new().name("spotiflux-bridge-accept".into()).spawn(move || {
             for stream in listener.incoming().flatten() {
+                if accept_shared.closed.load(Ordering::Relaxed) {
+                    break; // drops the listener, which frees the port
+                }
                 let (shared, events) = (accept_shared.clone(), events.clone());
                 let _ = thread::Builder::new()
                     .name("spotiflux-bridge-conn".into())
@@ -118,6 +124,15 @@ impl Bridge {
 
     pub fn local_addr(&self) -> SocketAddr {
         self.addr
+    }
+
+    /// Stop listening and close the connection, freeing the port (for a port change,
+    /// or to let another app take it). Every clone of this handle stops working.
+    pub fn shutdown(&self) {
+        self.shared.closed.store(true, Ordering::Relaxed);
+        *lock(&self.shared.conn) = None; // dropping the write queue ends the connection thread
+        lock(&self.shared.waiters).clear();
+        let _ = TcpStream::connect(self.addr); // wakes the accept loop so it sees `closed`
     }
 
     pub fn is_connected(&self) -> bool {

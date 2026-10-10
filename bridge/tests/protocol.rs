@@ -117,3 +117,18 @@ fn server_refuses_foreign_web_pages() {
     assert!(tungstenite::connect(req).is_err());
     assert_eq!(events.recv_timeout(Duration::from_secs(5)).unwrap(), Event::Rejected { origin: "https://evil.example".into() });
 }
+
+#[test]
+fn shutdown_frees_the_port() {
+    let (bridge, _events) = Bridge::listen(0, "test", "1").unwrap();
+    let addr = bridge.local_addr();
+    let (_ext, _) = tungstenite::connect(format!("ws://{addr}")).unwrap();
+    bridge.shutdown();
+    // The accept thread drops the listener right after its wake-up connection.
+    let bound = (0..50).any(|_| {
+        std::thread::sleep(Duration::from_millis(20));
+        std::net::TcpListener::bind(addr).is_ok()
+    });
+    assert!(bound, "port still taken after shutdown");
+    assert!(!bridge.is_connected());
+}
